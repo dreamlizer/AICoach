@@ -2,19 +2,19 @@ import OpenAI from "openai";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { 
   STAGE1_MODEL,
+  STAGE1_MODEL_NAME,
   STAGE1_API_KEY,
   STAGE1_PROMPT,
   STAGE3_MODEL,
+  STAGE3_MODEL_NAME,
   STAGE3_API_KEY,
   STAGE3_PROMPT,
   STAGE4_MODEL,
+  STAGE4_MODEL_NAME,
   STAGE4_API_KEY,
-  STAGE4_PROMPT,
-  STAGE5_MODEL,
-  STAGE5_API_KEY,
-  STAGE5_PROMPT
+  STAGE4_PROMPT
 } from "./stage_settings";
-import { getMessagesFromDb, getUserProfileFromDb, saveUserProfileToDb } from "./db";
+import { getMessagesFromDb } from "./db";
 import { Stage1Analysis, UserProfile } from "./types";
 
 // Helper function to call AI models (Gemini or DeepSeek)
@@ -22,6 +22,7 @@ async function callAIModel(
   modelType: string, 
   apiKey: string, 
   prompt: string, 
+  modelName: string,
   errorMessage: string = "AI Service Error"
 ): Promise<string> {
   if (!apiKey) throw new Error(`${modelType} API Key is missing`);
@@ -39,7 +40,7 @@ async function callAIModel(
     });
     const completion = await openai.chat.completions.create({
       messages: [{ role: "system", content: prompt }],
-      model: "deepseek-chat",
+      model: modelName,
     });
     return completion.choices[0].message.content || "";
   }
@@ -48,10 +49,20 @@ async function callAIModel(
 // Stage 2: Memory Retrieval
 export function getRecentHistory(conversationId: string): string {
   try {
-    const messages = getMessagesFromDb(conversationId, 5); // Get last 5 messages
+    // Reverted to Local History Mode: Fetch last 20 messages from CURRENT conversation only
+    // User requested to disable global cross-conversation context for now.
+    const messages = getMessagesFromDb(conversationId, 20); 
+    
     if (messages.length === 0) return "";
     
-    return messages.map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join("\n");
+    // Filter only text messages (user and ai replies), exclude 'analysis' or 'thinking'
+    // Handle null/undefined kind for legacy messages
+    const textMessages = messages.filter(m => !m.kind || m.kind === 'text' || m.role === 'user');
+    
+    // Take the last 10 turns
+    const recentMessages = textMessages.slice(-10);
+
+    return recentMessages.map(m => `${m.role === 'user' ? 'User' : 'AI'}: ${m.content}`).join("\n");
   } catch (error) {
     console.error("Failed to retrieve history:", error);
     return "";
@@ -73,7 +84,7 @@ export async function stage3Think(
     .replace("{history_context}", history || "无历史记录");
 
   try {
-    const result = await callAIModel(STAGE3_MODEL, STAGE3_API_KEY, prompt, "策略生成失败");
+    const result = await callAIModel(STAGE3_MODEL, STAGE3_API_KEY, prompt, STAGE3_MODEL_NAME, "策略生成失败");
     return result || "策略生成失败";
   } catch (error) {
     console.error("Stage 3 Thinking Error:", error);
@@ -83,12 +94,13 @@ export async function stage3Think(
 
 // Stage 4: Reply Generation
 export async function stage4Reply(
-  stage3Strategy: string
+  stage3Strategy: string,
+  overridePrompt?: string
 ): Promise<string> {
-  const prompt = STAGE4_PROMPT.replace("{stage3_strategy}", stage3Strategy);
+  const prompt = overridePrompt || STAGE4_PROMPT.replace("{stage3_strategy}", stage3Strategy);
 
   try {
-    const result = await callAIModel(STAGE4_MODEL, STAGE4_API_KEY, prompt, "回复生成失败");
+    const result = await callAIModel(STAGE4_MODEL, STAGE4_API_KEY, prompt, STAGE4_MODEL_NAME, "回复生成失败");
     return result || "回复生成失败";
   } catch (error) {
     console.error("Stage 4 Reply Error:", error);
@@ -101,7 +113,7 @@ export async function stage1_analyze(userInput: string): Promise<Stage1Analysis>
   const prompt = STAGE1_PROMPT.replace("{user_input}", userInput);
 
   try {
-    const result = await callAIModel(STAGE1_MODEL, STAGE1_API_KEY, prompt, "Intent Analysis Failed");
+    const result = await callAIModel(STAGE1_MODEL, STAGE1_API_KEY, prompt, STAGE1_MODEL_NAME, "Intent Analysis Failed");
     return parseJsonResult(result);
   } catch (error) {
     console.error("Stage 1 Analysis Error:", error);
@@ -120,6 +132,25 @@ export async function stage5Profile(
 ): Promise<UserProfile | null> {
   console.log('Stage 5 is temporarily disabled by user request.');
   return null;
+}
+
+// Helper: Generate Conversation Title
+export async function generateTitle(userMessage: string, aiReply: string): Promise<string> {
+  const prompt = `
+    Task: Generate a very short, concise title (max 10 chars) for this conversation.
+    User: ${userMessage.slice(0, 200)}
+    AI: ${aiReply.slice(0, 200)}
+    Title (No quotes, just text):
+  `.trim();
+
+  try {
+    // Use STAGE1 settings (usually faster/cheaper model) for this simple task
+    const title = await callAIModel(STAGE1_MODEL, STAGE1_API_KEY, prompt, STAGE1_MODEL_NAME, "New Chat");
+    return title.replace(/["《》]/g, "").trim().slice(0, 15);
+  } catch (e) {
+    console.error("Title Generation Failed:", e);
+    return "";
+  }
 }
 
 function parseJsonResult(text: string): any {

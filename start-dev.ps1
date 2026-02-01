@@ -2,7 +2,7 @@
 # ==========================================
 
 # 1. Check Node.js
-Write-Host "[1/4] Checking Node.js..." -NoNewline
+Write-Host "[1/3] Checking Node.js..." -NoNewline
 try {
     $nodeVersion = node -v 2>$null
     if ($LASTEXITCODE -eq 0) {
@@ -44,8 +44,8 @@ if (-not (Test-Path $frontendDir)) {
 
 Set-Location $frontendDir
 
-# 3. Check Dependencies
-Write-Host "`n[2/4] Checking dependencies..." 
+# 2. Check Dependencies
+Write-Host "`n[2/3] Checking dependencies..." 
 $nextBin = Join-Path "node_modules" ".bin\next.cmd"
 if (-not (Test-Path "node_modules") -or -not (Test-Path $nextBin)) {
     Write-Host "Dependencies incomplete or missing. Installing..." -ForegroundColor Yellow
@@ -63,20 +63,8 @@ if (-not (Test-Path "node_modules") -or -not (Test-Path $nextBin)) {
     Write-Host "Dependencies ready." -ForegroundColor Gray
 }
 
-# 4. Initialize Database
-Write-Host "`n[3/4] Initializing database..."
-$seedScript = Join-Path "scripts" "seed-history.mjs"
-if (Test-Path $seedScript) {
-    try {
-        node $seedScript
-        Write-Host "Database initialized." -ForegroundColor Green
-    } catch {
-        Write-Host "Warning: Database init failed, but ignoring." -ForegroundColor Yellow
-    }
-}
-
-# 5. Start Server
-Write-Host "`n[4/4] Starting server..." -ForegroundColor Cyan
+# 3. Start Server
+Write-Host "`n[3/3] Starting server..." -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "   Browser should open http://localhost:3000 automatically."
 Write-Host "   Please DO NOT close this window."

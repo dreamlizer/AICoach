@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GROW Model - Executive Partner</title>
+    <!-- 引入 html2canvas 用于保存图片 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+        :root {
+            /* 预设配色方案：经典深蓝 */
+            --primary-bg: #191b4d; 
+            --accent-color: #fccb2f;
+            --page-bg: #fbf7ef;
+            --text-main: #2d3748;
+            --card-shadow: rgba(0,0,0,0.1);
+            --font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+            --body-font-size: 0.88rem;
+            --line-height: 1.6; /* 默认行间距 */
+        }
+
+        /* 主题定义 */
+        .theme-emerald {
+            --primary-bg: #064e3b; /* 墨绿 */
+            --page-bg: #f0fdf4;
+            --accent-color: #fbbf24;
+        }
+
+        .theme-slate {
+            --primary-bg: #1e293b; /* 岩灰 */
+            --page-bg: #f8fafc;
+            --accent-color: #94a3b8;
+        }
+
+        /* 专业红主题 */
+        .theme-red {
+            --primary-bg: #bd1e2d; /* 专业红 */
+            --page-bg: #ffffff;
+            --accent-color: #4a5568; 
+            --text-main: #1a202c;
+        }
+
+        .font-song {
+            --font-family: "SimSun", "STSong", serif;
+        }
+
+        .font-hei {
+            --font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: #e2e8f0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 0;
+        }
+
+        /* 控制面板样式 */
+        .toolbar {
+            width: 100%;
+            max-width: 414px;
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(5px);
+            padding: 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+            border-bottom: 1px solid #cbd5e0;
+        }
+
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.7rem;
+            color: #4a5568;
+        }
+
+        .toolbar button, .toolbar select, .toolbar input[type="range"] {
+            padding: 6px 8px;
+            font-size: 0.7rem;
+            cursor: pointer;
+            border: 1px solid #cbd5e0;
+            background: #fff;
+            border-radius: 4px;
+            color: #4a5568;
+            outline: none;
+        }
+
+        .toolbar input[type="range"] {
+            width: 80px;
+            padding: 0;
+            cursor: ew-resize;
+        }
+
+        .toolbar .btn-save {
+            background: #2d3748;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+        }
+
+        /* 卡片容器 */
+        .card-wrapper {
+            padding: 15px 0 30px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        .card {
+            background-color: var(--page-bg);
+            width: 100%;
+            max-width: 414px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 10px 40px var(--card-shadow);
+            position: relative;
+            transition: all 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+        }
+
+        /* 紧凑头部 */
+        .header {
+            background-color: var(--primary-bg);
+            padding: 25px 20px 15px;
+            color: #ffffff;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            transition: background-color 0.4s;
+        }
+
+        .ep-tag {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            font-size: 0.6rem;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--accent-color);
+            opacity: 0.9;
+        }
+
+        .header h1 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            letter-spacing: 1px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .header h1::after {
+            content: "";
+            flex: 1;
+            height: 1px;
+            background: linear-gradient(to right, var(--accent-color), transparent);
+            opacity: 0.4;
+        }
+
+        /* 内容区 */
+        .container {
+            padding: 20px 15px 5px;
+        }
+
+        .step-block {
+            margin-bottom: 16px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .step-aside {
+            flex-shrink: 0;
+            width: 36px;
+            text-align: center;
+        }
+
+        .step-letter {
+            font-family: "Georgia", serif;
+            font-size: 1.8rem;
+            font-weight: 900;
+            color: var(--primary-bg);
+            line-height: 1;
+            transition: color 0.4s;
+        }
+
+        .step-main {
+            flex-grow: 1;
+        }
+
+        .step-title {
+            font-size: 0.9rem;
+            font-weight: 700;
+            color: var(--primary-bg);
+            margin-bottom: 5px;
+            text-transform: uppercase;
+            transition: color 0.4s;
+        }
+
+        .step-content {
+            background: white;
+            padding: 12px 14px;
+            border-radius: 2px;
+            font-size: var(--body-font-size);
+            line-height: var(--line-height);
+            color: var(--text-main);
+            border-left: 3px solid var(--primary-bg);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.03);
+            outline: none;
+            transition: border-color 0.4s, line-height 0.2s;
+        }
+
+        .step-content:focus {
+            background: #fffdf9;
+            border-left-color: var(--accent-color);
+        }
+
+        .list-item {
+            margin-bottom: 4px;
+            padding-left: 12px;
+            position: relative;
+        }
+
+        .list-item::before {
+            content: "";
+            position: absolute;
+            left: 0;
+            top: calc(0.5em * var(--line-height));
+            width: 4px;
+            height: 1px;
+            background-color: var(--accent-color);
+        }
+
+        .highlight-text {
+            color: var(--primary-bg);
+            font-weight: 600;
+        }
+
+        /* 底部标语 */
+        .footer {
+            padding: 20px;
+            text-align: center;
+            background: linear-gradient(to bottom, transparent, rgba(0,0,0,0.01));
+        }
+
+        .slogan-cn {
+            font-size: 0.85rem;
+            color: var(--primary-bg);
+            font-weight: 600;
+            letter-spacing: 3px;
+            margin-bottom: 4px;
+            outline: none;
+            transition: color 0.4s;
+        }
+
+        .footer-sub {
+            font-size: 0.55rem;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            outline: none;
+        }
+
+        /* 导出遮罩 */
+        #export-loading {
+            display: none;
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(255,255,255,0.9);
+            z-index: 1000;
+            justify-content: center;
+            align-items: center;
+            font-weight: 500;
+            color: var(--primary-bg);
+        }
+    </style>
+</head>
+<body class="font-hei">
+
+    <div id="export-loading">正在准备高清卡片...</div>
+
+    <!-- 控制面板 -->
+    <div class="toolbar" id="control-panel">
+        <select id="font-select" onchange="changeFont(this.value)">
+            <option value="hei">现代黑体</option>
+            <option value="song">经典宋体</option>
+        </select>
+        
+        <div class="tool-group">
+            <span>字号</span>
+            <button onclick="changeFontSize(1)">+</button>
+            <button onclick="changeFontSize(-1)">-</button>
+        </div>
+
+        <div class="tool-group">
+            <span>间距</span>
+            <input type="range" id="lh-range" min="1.2" max="2.2" step="0.1" value="1.6" oninput="changeLineHeight(this.value)">
+        </div>
+
+        <button onclick="nextTheme()">切换配色</button>
+        <button class="btn-save" onclick="saveAsImage()">存为图片</button>
+    </div>
+
+    <div class="card-wrapper" id="capture-area">
+        <div class="card" id="main-card">
+            <header class="header">
+                <span class="ep-tag" contenteditable="true">Executive Partner</span>
+                <h1 contenteditable="true">GROW COACHING</h1>
+            </header>
+
+            <main class="container">
+                <!-- GOAL -->
+                <section class="step-block">
+                    <div class="step-aside">
+                        <div class="step-letter">G</div>
+                    </div>
+                    <div class="step-main">
+                        <h2 class="step-title" contenteditable="true">Goal / 目标确立</h2>
+                        <div class="step-content" contenteditable="true">
+                            未来三个月内，将产品交付周期从 <span class="highlight-text">22天</span> 缩短至 <span class="highlight-text">15天</span>，实现团队效能突破。
+                        </div>
+                    </div>
+                </section>
+
+                <!-- REALITY -->
+                <section class="step-block">
+                    <div class="step-aside">
+                        <div class="step-letter" style="margin-left: -2px;">R</div>
+                    </div>
+                    <div class="step-main">
+                        <h2 class="step-title" contenteditable="true">Reality / 现状分析</h2>
+                        <div class="step-content" contenteditable="true">
+                            <div class="list-item">需求变更频繁，导致约 30% 的重复开发量。</div>
+                            <div class="list-item">跨部门协作平均耗时 4.5 天，流程节点过多。</div>
+                            <div class="list-item">测试环境手动部署，缺乏自动化流水线支持。</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- OPTIONS -->
+                <section class="step-block">
+                    <div class="step-aside">
+                        <div class="step-letter">O</div>
+                    </div>
+                    <div class="step-main">
+                        <h2 class="step-title" contenteditable="true">Options / 方案选择</h2>
+                        <div class="step-content" contenteditable="true">
+                            <div class="list-item">推行看板管理，严格执行需求准入审查机制。</div>
+                            <div class="list-item">引入 CI/CD 自动化流水线，降低人为操作风险。</div>
+                            <div class="list-item">下放日常决策权，简化非核心业务的审批路径。</div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- WILL -->
+                <section class="step-block">
+                    <div class="step-aside">
+                        <div class="step-letter" style="margin-left: -2px;">W</div>
+                    </div>
+                    <div class="step-main">
+                        <h2 class="step-title" contenteditable="true">Will / 意愿行动</h2>
+                        <div class="step-content" contenteditable="true">
+                            <div class="list-item"><strong>即刻：</strong> 开启全流程瓶颈审计会议。</div>
+                            <div class="list-item"><strong>周五：</strong> 确认技术改造负责人与首阶段节点。</div>
+                            <div class="list-item"><strong>机制：</strong> 启动每周五的效能复盘反馈闭环。</div>
+                        </div>
+                    </div>
+                </section>
+            </main>
+
+            <footer class="footer">
+                <div class="slogan-cn" contenteditable="true">见微知著，引领战略全局</div>
+                <div class="footer-sub" contenteditable="true">Strategic Leadership • Executive Coaching Card</div>
+            </footer>
+        </div>
+    </div>
+
+    <script>
+        // 1. 字体调整
+        function changeFont(val) {
+            document.body.className = val === 'song' ? 'font-song' : 'font-hei';
+        }
+
+        // 2. 字号调整
+        let currentSize = 0.88;
+        function changeFontSize(delta) {
+            currentSize = Math.max(0.7, Math.min(1.2, currentSize + delta * 0.05));
+            document.documentElement.style.setProperty('--body-font-size', currentSize + 'rem');
+        }
+
+        // 3. 行间距调整
+        function changeLineHeight(val) {
+            document.documentElement.style.setProperty('--line-height', val);
+        }
+
+        // 4. 配色方案切换
+        const themes = ['', 'theme-emerald', 'theme-slate', 'theme-red'];
+        let currentThemeIndex = 0;
+        function nextTheme() {
+            const card = document.getElementById('main-card');
+            card.classList.remove(...themes.filter(t => t !== ''));
+            currentThemeIndex = (currentThemeIndex + 1) % themes.length;
+            if (themes[currentThemeIndex]) {
+                card.classList.add(themes[currentThemeIndex]);
+            }
+        }
+
+        // 5. 存为图片
+        function saveAsImage() {
+            const loading = document.getElementById('export-loading');
+            const card = document.getElementById('main-card');
+            
+            loading.style.display = 'flex';
+            
+            setTimeout(() => {
+                html2canvas(card, {
+                    scale: 3, 
+                    useCORS: true,
+                    backgroundColor: null,
+                    logging: false
+                }).then(canvas => {
+                    const link = document.createElement('a');
+                    link.download = 'Executive_GROW_Card.png';
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                    loading.style.display = 'none';
+                }).catch(err => {
+                    console.error("导出失败:", err);
+                    loading.style.display = 'none';
+                });
+            }, 100);
+        }
+    </script>
+
+</body>
+</html>

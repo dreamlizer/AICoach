@@ -10,8 +10,13 @@
 // 1. Global API Keys (全局 API 密钥)
 // ----------------------------------------------------------------------------------
 // 在此处填入你的 API Key，供下方各个 Stage 调用。
-export const COMMON_DEEPSEEK_KEY = "sk-9c559429638842fe854f0c1603eba9a3";
-export const COMMON_GEMINI_KEY = ""; 
+export const COMMON_DEEPSEEK_KEY = process.env.DEEPSEEK_API_KEY || "";
+export const COMMON_GEMINI_KEY = process.env.GEMINI_API_KEY || "";
+type ModelProvider = "deepseek" | "gemini";
+const MODEL_API_KEYS: Record<ModelProvider, string> = {
+  deepseek: COMMON_DEEPSEEK_KEY,
+  gemini: COMMON_GEMINI_KEY
+};
 
 
 // ----------------------------------------------------------------------------------
@@ -37,11 +42,12 @@ export const STAGE1_PROMPT = `
 
 // 模型选择开关 (Model Switch)
 // 可选值: "deepseek" 或 "gemini"
-export const STAGE1_MODEL = "deepseek";
+export const STAGE1_MODEL: ModelProvider = "deepseek";
+export const STAGE1_MODEL_NAME = "deepseek-chat"; // deepseek-chat (V3) or deepseek-reasoner (R1)
 
 // 当前阶段使用的 API Key (自动映射)
 // 根据 STAGE1_MODEL 的值自动选择对应的 Key
-export const STAGE1_API_KEY = STAGE1_MODEL === "gemini" ? COMMON_GEMINI_KEY : COMMON_DEEPSEEK_KEY;
+export const STAGE1_API_KEY = MODEL_API_KEYS[STAGE1_MODEL];
 
 
 // [Stage 3: Deep Thinking Strategy - 深度思考策略]
@@ -57,7 +63,10 @@ export const STAGE3_PROMPT = `
 思考维度：
 1. 潜台词：用户表面在问什么？实际担心什么？
 2. 策略：此时应该“共情倾听”还是“挑战提问”？
-3. 建议方向：给出一个核心建议点。
+3. 核心回复要点 (Critical)：
+   - 如果是 [QUERY] 咨询类：必须在此处给出具体的答案、事实或知识点。（例如用户问时间，你必须告诉 Stage 4 具体时间）。
+   - 如果是 [EMOTIONAL] 情绪类：给出共情的关键话术点。
+   - 不要只说“回答用户问题”，要写出“答案是什么”。
 
 [特殊情况处理]
 - 如果 Intent 是 [CHAT] 或 Complexity 是 [LOW]：
@@ -70,10 +79,11 @@ export const STAGE3_PROMPT = `
 `;
 
 // 模型选择开关 (Model Switch)
-export const STAGE3_MODEL = "deepseek";
+export const STAGE3_MODEL: ModelProvider = "deepseek";
+export const STAGE3_MODEL_NAME = "deepseek-chat"; // 建议: 复杂策略可尝试 deepseek-reasoner (速度较慢但逻辑更强)
 
 // 当前阶段使用的 API Key
-export const STAGE3_API_KEY = STAGE3_MODEL === "gemini" ? COMMON_GEMINI_KEY : COMMON_DEEPSEEK_KEY;
+export const STAGE3_API_KEY = MODEL_API_KEYS[STAGE3_MODEL];
 
 
 // [Stage 4: Expression Layer - 表达层]
@@ -94,10 +104,11 @@ export const STAGE4_PROMPT = `
 `;
 
 // 模型选择开关 (Model Switch)
-export const STAGE4_MODEL = "deepseek";
+export const STAGE4_MODEL: ModelProvider = "deepseek";
+export const STAGE4_MODEL_NAME = "deepseek-chat"; // 表达层建议保持 chat 以确保响应速度
 
 // 当前阶段使用的 API Key
-export const STAGE4_API_KEY = STAGE4_MODEL === "gemini" ? COMMON_GEMINI_KEY : COMMON_DEEPSEEK_KEY;
+export const STAGE4_API_KEY = MODEL_API_KEYS[STAGE4_MODEL];
 
 
 // [Stage 5: User Profiling - 用户画像]
@@ -132,7 +143,8 @@ export const STAGE5_PROMPT = `
 [JSON 结构] { "analysis_log": "（重要）此处禁止只写“无侦查记录”！你必须对以下8个维度逐一进行分析陈述（即使是无法判断也要明确写出“xxx维度目前无明确线索”）：1.性别 2.年龄 3.职位 4.行业 5.地点 6.婚育 7.性格 8.领导力层级。请用简练的语言将这8项的推理过程或无结果的原因都记录下来。", "demographics": { "gender": { "value": "...", "confidence": 85 }, "age": { "value": "...", "confidence": 60 }, "job": { "value": "...", "confidence": 80 }, "industry": { "value": "...", "confidence": 0 }, "location": { "value": "...", "confidence": 0 }, "family": { "value": "...", "confidence": 95 } }, "personality": "...", "leadership_level": { "level": "Lv5 成就型", "reason": "...", "confidence": 80 } } `;
 
 // 模型选择开关 (Model Switch)
-export const STAGE5_MODEL = "deepseek";
+export const STAGE5_MODEL: ModelProvider = "deepseek";
+export const STAGE5_MODEL_NAME = "deepseek-chat";
 
 // 当前阶段使用的 API Key
-export const STAGE5_API_KEY = STAGE5_MODEL === "gemini" ? COMMON_GEMINI_KEY : COMMON_DEEPSEEK_KEY;
+export const STAGE5_API_KEY = MODEL_API_KEYS[STAGE5_MODEL];

@@ -31,15 +31,18 @@ export type Message = {
   id: string;
   role: "user" | "ai";
   content: string;
-  kind?: "text" | "card" | "thinking" | "analysis";
+  kind?: "text" | "card" | "thinking" | "analysis" | "canvas";
   debugInfo?: DebugInfo;
+  canvasHtml?: string;
   created_at?: string;
 };
 
 export type HistoryItem = {
-  id: number;
+  id: string;
   title: string;
   created_at: string;
+  updated_at?: string;
+  tool_id?: string | null;
 };
 
 export interface Stage1Analysis {
