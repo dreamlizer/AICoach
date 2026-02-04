@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Message } from "@/lib/types";
 import { AnalysisPanel } from "./AnalysisPanel";
+import { LoadingStatus } from "./LoadingStatus";
 
 interface ChatMessageProps {
   message: Message;
@@ -114,22 +115,19 @@ export function ChatMessage({ message }: ChatMessageProps) {
           )}
         </div>
       ) : message.kind === "thinking" ? (
-        <div className="max-w-[80%] rounded-2xl bg-[#FFF9E6] px-5 py-3 text-base text-[#002345] shadow-sm">
-          <span className="inline-flex items-center gap-1 text-lg">
-            <span className="animate-pulse">.</span>
-            <span className="animate-pulse">.</span>
-            <span className="animate-pulse">.</span>
-          </span>
-        </div>
+        <LoadingStatus />
       ) : (
         <div
-          className={`max-w-[80%] rounded-2xl px-5 py-3 text-base leading-relaxed shadow-sm ${
+          className={`max-w-[80%] rounded-2xl px-5 py-3 text-base leading-relaxed ${
             message.role === "user"
-              ? "bg-[#060E9F] text-white"
-              : "bg-[#FFF9E6] text-[#002345]"
+              ? "bg-[#060E9F] text-white shadow-sm"
+              : "bg-transparent text-[#002345] shadow-none animate-in fade-in slide-in-from-bottom-2 duration-700"
           }`}
         >
           {message.content}
+          {message.role === "ai" && (
+            <div className="mt-4 h-[2px] w-20 bg-[#FFBF3F]"></div>
+          )}
         </div>
       )}
     </div>

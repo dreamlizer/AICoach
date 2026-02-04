@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import { ModelProvider } from "@/lib/stage_settings";
 
 interface ChatInputProps {
   input: string;
@@ -7,6 +8,8 @@ interface ChatInputProps {
   onFilesSelected?: (files: FileList | null) => void;
   isLoading?: boolean;
   canSubmit?: boolean;
+  selectedModel: ModelProvider;
+  onModelChange: (model: ModelProvider) => void;
 }
 
 export function ChatInput({
@@ -15,13 +18,17 @@ export function ChatInput({
   onSubmit,
   onFilesSelected,
   isLoading,
-  canSubmit
+  canSubmit,
+  selectedModel,
+  onModelChange
 }: ChatInputProps) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const docInputRef = useRef<HTMLInputElement | null>(null);
   const menuRef = useRef<HTMLDivElement | null>(null);
+  const modelMenuRef = useRef<HTMLDivElement | null>(null);
   const [uploadMenuOpen, setUploadMenuOpen] = useState(false);
+  const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const canSend = canSubmit ?? Boolean(input.trim());
 
   const resizeTextarea = () => {
@@ -43,16 +50,19 @@ export function ChatInput({
   }, [input]);
 
   useEffect(() => {
-    if (!uploadMenuOpen) return;
+    if (!uploadMenuOpen && !modelMenuOpen) return;
     const handleClick = (event: MouseEvent) => {
-      if (!menuRef.current) return;
-      if (!menuRef.current.contains(event.target as Node)) {
+      if (uploadMenuOpen && menuRef.current && !menuRef.current.contains(event.target as Node)) {
         setUploadMenuOpen(false);
+      }
+      if (modelMenuOpen && modelMenuRef.current && !modelMenuRef.current.contains(event.target as Node)) {
+        setModelMenuOpen(false);
       }
     };
     const handleKey = (event: KeyboardEvent) => {
       if (event.key === "Escape") {
         setUploadMenuOpen(false);
+        setModelMenuOpen(false);
       }
     };
     document.addEventListener("mousedown", handleClick);
@@ -61,7 +71,7 @@ export function ChatInput({
       document.removeEventListener("mousedown", handleClick);
       document.removeEventListener("keydown", handleKey);
     };
-  }, [uploadMenuOpen]);
+  }, [uploadMenuOpen, modelMenuOpen]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     onFilesSelected?.(event.target.files);
@@ -72,7 +82,7 @@ export function ChatInput({
   return (
     <form
       onSubmit={onSubmit}
-      className="mx-auto w-full max-w-2xl px-4 py-6"
+      className="mx-auto w-full max-w-2xl px-4 py-4 md:py-6"
     >
       <div className="relative flex items-end">
         <input
@@ -137,18 +147,69 @@ export function ChatInput({
           disabled={isLoading}
           rows={1}
           ref={textareaRef}
-          className="w-full resize-none rounded-2xl border border-gray-200 pl-14 pr-14 py-4 text-lg leading-relaxed text-[#060E9F] placeholder:text-[#060E9F]/40 shadow-sm focus:outline-none focus:border-[#060E9F] focus:shadow-[0_0_15px_rgba(255,191,63,0.3)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full resize-none rounded-2xl border border-gray-200 pl-14 pr-36 py-4 text-lg leading-relaxed text-[#060E9F] placeholder:text-[#060E9F]/40 shadow-sm focus:outline-none focus:border-[#060E9F] focus:shadow-[0_0_15px_rgba(255,191,63,0.3)] transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
         />
-        <button
-          type="submit"
-          disabled={!canSend || isLoading}
-          className="absolute bottom-3 right-3 p-2 text-[#060E9F]/40 hover:text-[#060E9F] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-        >
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="22" y1="2" x2="11" y2="13"></line>
-            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-          </svg>
-        </button>
+        
+        <div className="absolute bottom-3 right-3 flex items-center gap-1">
+          {/* Model Selection Button */}
+          <div className="relative">
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setModelMenuOpen(!modelMenuOpen);
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gray-100 hover:bg-gray-200 text-xs font-medium text-[#060E9F] transition-colors"
+              title="选择模型"
+            >
+              <span>{selectedModel === "deepseek" ? "DeepSeek" : "Doubao"}</span>
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={`transition-transform duration-200 ${modelMenuOpen ? 'rotate-180' : ''}`}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            
+            {modelMenuOpen && (
+              <div
+                ref={modelMenuRef}
+                className="absolute bottom-full right-0 mb-2 z-10 w-32 rounded-xl border border-gray-100 bg-white py-2 text-sm text-[#060E9F] shadow-lg"
+              >
+                 <button
+                  type="button"
+                  onClick={() => {
+                    onModelChange("deepseek");
+                    setModelMenuOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-gray-50 ${selectedModel === "deepseek" ? "bg-gray-50 font-semibold" : ""}`}
+                >
+                  DeepSeek
+                  {selectedModel === "deepseek" && <span className="text-[#060E9F]">✓</span>}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onModelChange("doubao");
+                    setModelMenuOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between px-3 py-2 text-left hover:bg-gray-50 ${selectedModel === "doubao" ? "bg-gray-50 font-semibold" : ""}`}
+                >
+                  Doubao
+                  {selectedModel === "doubao" && <span className="text-[#060E9F]">✓</span>}
+                </button>
+              </div>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={!canSend || isLoading}
+            className="p-2 text-[#060E9F]/40 hover:text-[#060E9F] disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+          >
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="22" y1="2" x2="11" y2="13"></line>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+            </svg>
+          </button>
+        </div>
       </div>
     </form>
   );

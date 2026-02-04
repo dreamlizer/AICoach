@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logo Generator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background-color: #f0f2f5;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            color: #333;
+            /* 允许横向滚动 */
+            overflow-x: auto; 
+        }
+
+        .container {
+            display: flex;
+            flex-direction: row; /* 强制横向排列 */
+            align-items: center;
+            justify-content: center;
+            gap: 30px; 
+            flex-wrap: nowrap; /* 禁止自动换行 */
+            padding: 20px;
+            min-width: fit-content;
+        }
+
+        .logo-card {
+            background-color: white;
+            padding: 40px;
+            border-radius: 50%;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.08);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 320px;
+            height: 320px;
+            position: relative;
+            flex-shrink: 0; 
+        }
+
+        svg {
+            width: 100%;
+            height: 100%;
+            overflow: visible;
+        }
+
+        .controls {
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            width: 300px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            flex-shrink: 0; 
+        }
+
+        .control-group {
+            margin-bottom: 25px;
+        }
+        
+        .control-group:last-child {
+            margin-bottom: 0;
+        }
+
+        .control-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #555;
+        }
+
+        input[type="range"] {
+            width: 100%;
+            -webkit-appearance: none;
+            height: 6px;
+            background: #e1e4e8;
+            border-radius: 3px;
+            outline: none;
+            cursor: pointer;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: #c1272d;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            transition: transform 0.1s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            transform: scale(1.1);
+        }
+        
+        .value-display {
+            color: #555; /* 改为通用灰色，不再硬编码为红色 */
+            font-family: monospace;
+        }
+
+        /* 颜色选择器样式 */
+        .color-options {
+            display: flex;
+            gap: 15px;
+            justify-content: flex-start;
+        }
+
+        .color-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid white;
+            cursor: pointer;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+        }
+
+        .color-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .color-btn.active {
+            box-shadow: 0 0 0 2px #e1e4e8, 0 4px 8px rgba(0,0,0,0.15);
+            transform: scale(1.1);
+        }
+
+        /* 移除原本的 .logo-red 类定义，改由JS控制 */
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Logo 展示区 -->
+        <div class="logo-card">
+            <svg viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+                <!-- 1. 右侧圆环 (Right Ring) -->
+                <!-- stroke 初始颜色设为红色，后续JS控制 -->
+                <circle id="rightRing" cx="66" cy="38" r="19.75" fill="none" stroke="#c1272d" stroke-width="4.5" />
+
+                <!-- 2. 遮罩层 (Mask Gap) -->
+                <circle cx="38" cy="38" r="26" fill="white" stroke="none" />
+
+                <!-- 3. 左侧实心圆 (Left Solid Circle) -->
+                <!-- 增加了 ID: leftCircle -->
+                <circle id="leftCircle" cx="38" cy="38" r="22" fill="#c1272d" stroke="none" />
+
+                <!-- 4. 底部横条 (Bottom Bar) -->
+                <rect id="bottomBar" x="22" y="72" width="66" height="4.5" rx="2.25" fill="#c1272d" stroke="none" />
+            </svg>
+        </div>
+
+        <!-- 控制面板 -->
+        <div class="controls">
+            <!-- 颜色选择控制 -->
+            <div class="control-group">
+                <div class="control-label">
+                    <span>配色 (Color Scheme)</span>
+                </div>
+                <div class="color-options">
+                    <!-- 红色 -->
+                    <button class="color-btn active" style="background-color: #c1272d" data-color="#c1272d"></button>
+                    <!-- 黑色 -->
+                    <button class="color-btn" style="background-color: #000000" data-color="#000000"></button>
+                    <!-- 深蓝色 (取自截图) -->
+                    <button class="color-btn" style="background-color: #0011a8" data-color="#0011a8"></button>
+                </div>
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
+                    <span>线条粗细 (Thickness)</span>
+                    <span id="val-thickness" class="value-display">4.5</span>
+                </div>
+                <input type="range" id="input-thickness" min="1" max="15" step="0.5" value="4.5">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
+                    <span>圆环位置 (Position)</span>
+                    <span id="val-offset" class="value-display">66</span>
+                </div>
+                <input type="range" id="input-offset" min="40" max="85" step="0.5" value="66">
+            </div>
+
+            <div class="control-group">
+                <div class="control-label">
+                    <span>垂直间距 (Gap)</span>
+                    <span id="val-gap" class="value-display">12</span>
+                </div>
+                <input type="range" id="input-gap" min="2" max="30" step="1" value="12">
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const rightRing = document.getElementById('rightRing');
+        const leftCircle = document.getElementById('leftCircle'); // 新增
+        const bottomBar = document.getElementById('bottomBar');
+        
+        const inputThickness = document.getElementById('input-thickness');
+        const inputOffset = document.getElementById('input-offset');
+        const inputGap = document.getElementById('input-gap');
+
+        const valThickness = document.getElementById('val-thickness');
+        const valOffset = document.getElementById('val-offset');
+        const valGap = document.getElementById('val-gap');
+        
+        const colorBtns = document.querySelectorAll('.color-btn');
+        const sliderThumbs = document.querySelectorAll('input[type="range"]'); // 用于更新滑块颜色
+
+        const LEFT_CIRCLE_R = 22;
+        const LEFT_CIRCLE_CY = 38;
+        const BAR_START_X = 22;
+        
+        // 当前选中的颜色
+        let currentColor = '#c1272d';
+
+        // 颜色切换逻辑
+        colorBtns.forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                // 1. 更新按钮状态
+                colorBtns.forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                // 2. 获取并设置新颜色
+                currentColor = btn.getAttribute('data-color');
+                applyColor(currentColor);
+            });
+        });
+
+        function applyColor(color) {
+            // 更新 SVG 元素颜色
+            rightRing.setAttribute('stroke', color);
+            leftCircle.setAttribute('fill', color);
+            bottomBar.setAttribute('fill', color);
+
+            // 更新滑块轨道颜色 (视觉优化)
+            document.querySelectorAll('input[type="range"]::-webkit-slider-thumb').forEach(style => {
+                // 注意：无法直接通过 JS 修改伪元素样式，
+                // 但我们可以通过更新 CSS 变量或简单的 style 注入来变通。
+                // 这里为了简单，我们动态修改 style 标签
+            });
+            
+            // 更新数值显示的颜色
+            document.querySelectorAll('.value-display').forEach(el => {
+                el.style.color = color;
+            });
+            
+            // 更新滑块滑块的颜色（通过修改style标签实现）
+            updateSliderStyle(color);
+        }
+
+        // 动态注入 CSS 来改变滑块颜色
+        function updateSliderStyle(color) {
+            let styleEl = document.getElementById('dynamic-slider-style');
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = 'dynamic-slider-style';
+                document.head.appendChild(styleEl);
+            }
+            styleEl.textContent = `
+                input[type="range"]::-webkit-slider-thumb {
+                    background: ${color} !important;
+                }
+            `;
+        }
+
+        function updateLogo() {
+            const thickness = parseFloat(inputThickness.value);
+            const ringCx = parseFloat(inputOffset.value);
+            const gap = parseFloat(inputGap.value);
+
+            valThickness.textContent = thickness;
+            valOffset.textContent = ringCx;
+            valGap.textContent = gap;
+
+            rightRing.setAttribute('stroke-width', thickness);
+            bottomBar.setAttribute('height', thickness);
+            bottomBar.setAttribute('rx', thickness / 2);
+
+            const newRadius = LEFT_CIRCLE_R - (thickness / 2);
+            rightRing.setAttribute('r', Math.max(0, newRadius));
+
+            rightRing.setAttribute('cx', ringCx);
+
+            const rightEdge = ringCx + LEFT_CIRCLE_R;
+            const newWidth = rightEdge - BAR_START_X;
+            bottomBar.setAttribute('width', Math.max(0, newWidth));
+
+            const newBarY = (LEFT_CIRCLE_CY + LEFT_CIRCLE_R) + gap;
+            bottomBar.setAttribute('y', newBarY);
+        }
+
+        inputThickness.addEventListener('input', updateLogo);
+        inputOffset.addEventListener('input', updateLogo);
+        inputGap.addEventListener('input', updateLogo);
+
+        // 初始化
+        updateLogo();
+        applyColor(currentColor); // 初始化颜色和滑块样式
+    </script>
+</body>
+</html>

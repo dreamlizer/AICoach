@@ -1,176 +1,128 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import type { ElementType } from "react";
-import { Message, HistoryItem } from "@/lib/types";
 import { Sidebar } from "@/app/components/Sidebar";
 import { ChatMessage } from "@/app/components/ChatMessage";
 import { WelcomeHeader } from "@/app/components/WelcomeHeader";
 import { ChatInput } from "@/app/components/ChatInput";
+import { toolIconMap } from "@/app/components/Icons";
 import { executiveTools, ExecutiveTool } from "@/lib/executive_tools";
-import { Target, Stethoscope } from "lucide-react";
+import { generateToolSuffix } from "@/lib/utils";
+import { useChat } from "@/hooks/useChat";
+import { useHistory } from "@/hooks/useHistory";
+import { Message, HistoryItem } from "@/lib/types";
+
+import { ProjectLogo } from "@/app/components/ProjectLogo";
+import { UserMenu } from "@/app/components/UserMenu";
+import { SearchInterface } from "@/app/components/SearchInterface";
+import { useAuth } from "@/context/auth-context";
+import { AuthModal } from "@/app/components/AuthModal";
+
+const DEFAULT_SLOGAN: [string, string] = ["真正的清晰来自于减法，", "而不是堆叠"];
 
 export default function Page() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState("");
-  const [attachments, setAttachments] = useState<
-    { name: string; type: string; text?: string }[]
-  >([]);
+  const { user } = useAuth();
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
-  const [historyLoading, setHistoryLoading] = useState(true);
   const [currentConversationId, setCurrentConversationId] = useState("");
   const [toolsPanelOpen, setToolsPanelOpen] = useState(false);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [showAuthModal, setShowAuthModal] = useState(false);
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
   const [pendingToolTitle, setPendingToolTitle] = useState<string | null>(null);
-  const [sloganLines, setSloganLines] = useState<[string, string]>([
-    "真正的清晰来自于减法，",
-    "而不是堆叠"
-  ]);
+  const [sloganLines, setSloganLines] = useState<[string, string]>(DEFAULT_SLOGAN);
+  
+  // State for scroll targeting
+  const [targetMessageId, setTargetMessageId] = useState<number | null>(null);
+  
   const endRef = useRef<HTMLDivElement | null>(null);
+
+  // Custom Hooks
+  const { 
+    history, 
+    historyLoading, 
+    fetchHistory 
+  } = useHistory();
+
+  const {
+    messages,
+    setMessages,
+    input,
+    setInput,
+    attachments,
+    handleFilesSelected,
+    sendMessage,
+    selectedModel,
+    setSelectedModel,
+    loadConversation
+  } = useChat(
+    currentConversationId, 
+    activeToolId, 
+    pendingToolTitle, 
+    () => fetchHistory(true),
+    () => setShowAuthModal(true)
+  );
 
   useEffect(() => {
     setCurrentConversationId(crypto.randomUUID());
-  }, []);
-
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages]);
-
-  const fetchHistory = () => {
-    // Silent update (don't set loading to true to avoid UI flicker)
-    fetch("/api/history", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data: HistoryItem[]) => {
-        setHistory(data);
-      })
-      .catch((err) => console.error("Failed to load history:", err));
-  };
-
-  useEffect(() => {
-    setHistoryLoading(true);
-    fetch("/api/history", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data: HistoryItem[]) => {
-        setHistory(data);
-      })
-      .catch((err) => console.error("Failed to load history:", err))
-      .finally(() => {
-        setHistoryLoading(false);
-      });
-  }, []);
-
-  const updateMessage = (id: string, content: string) => {
-    setMessages((prev) =>
-      prev.map((message) =>
-        message.id === id ? { ...message, content } : message
-      )
-    );
-  };
-
-  const startTypewriter = (id: string, text: string) => {
-    let index = 0;
-    const interval = setInterval(() => {
-      index += 1;
-      updateMessage(id, text.slice(0, index));
-      if (index >= text.length) {
-        clearInterval(interval);
-      }
-    }, 40);
-  };
-
-  const extractHtmlFromText = (text: string) => {
-    const htmlFence = text.match(/```html\s*([\s\S]*?)```/i);
-    if (htmlFence) return htmlFence[1].trim();
-    const genericFence = text.match(/```([\s\S]*?)```/);
-    if (genericFence && /<\/?[a-z][\s\S]*>/i.test(genericFence[1])) {
-      return genericFence[1].trim();
+    if (typeof window !== 'undefined' && window.innerWidth < 768) {
+      setSidebarOpen(false);
     }
-    const inlineHtml = text.match(/(<html[\s\S]*<\/html>)/i);
-    if (inlineHtml) return inlineHtml[1].trim();
-    return null;
-  };
+  }, []);
 
-  const stripHtmlFromText = (text: string) => {
-    let result = text;
-    result = result.replace(/```html\s*[\s\S]*?```/gi, "");
-    result = result.replace(/```[\s\S]*?```/g, (block) =>
-      /<\/?[a-z][\s\S]*>/i.test(block) ? "" : block
-    );
-    result = result.replace(/<html[\s\S]*<\/html>/gi, "");
-    return result.trim();
-  };
+  // Merge anonymous conversation on login
+  useEffect(() => {
+    if (user && currentConversationId) {
+      fetch("/api/conversations/merge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: currentConversationId }),
+      }).catch(err => console.error("Merge failed", err));
+    }
+  }, [user, currentConversationId]);
 
-  const sanitizeHtml = (html: string) => {
-    return html.trim();
-  };
+  useEffect(() => {
+    // Scroll logic:
+    // If we have a target message, try to scroll to it.
+    // Otherwise, scroll to bottom (default behavior for new messages).
+    
+    if (targetMessageId) {
+       // Give DOM a tick to render
+       setTimeout(() => {
+         const el = document.getElementById(`message-${targetMessageId}`);
+         if (el) {
+           el.scrollIntoView({ behavior: "smooth", block: "center" });
+           // Optional: Highlight effect
+           el.classList.add("bg-yellow-50", "transition-colors", "duration-1000");
+           setTimeout(() => el.classList.remove("bg-yellow-50"), 2000);
+           
+           // Clear target so subsequent renders don't keep jumping
+           setTargetMessageId(null);
+         }
+       }, 100);
+    } else {
+       endRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, targetMessageId]);
 
   const handleHistoryClick = async (item: HistoryItem) => {
     setCurrentConversationId(item.id);
     setActiveToolId(item.tool_id || null);
     setPendingToolTitle(null);
+    setSearchOpen(false); // Close search if open
+    setTargetMessageId(null); // Reset scroll target on normal click
+
     if (item.tool_id) {
       const tool = executiveTools.find((t) => t.id === item.tool_id);
       if (tool) {
         setSloganLines(tool.slogan);
       }
     } else {
-      setSloganLines(["真正的清晰来自于减法，", "而不是堆叠"]);
+      setSloganLines(DEFAULT_SLOGAN);
     }
     setToolsPanelOpen(false);
-    setMessages([]); // Clear current view while loading
+    setMessages([]); 
     
-    try {
-      const res = await fetch(`/api/history/${item.id}`);
-      if (!res.ok) throw new Error("Failed to load conversation");
-      
-      const data = await res.json();
-      
-      const uiMessages: Message[] = [];
-      data.forEach((msg: any) => {
-        const baseMsg: Message = {
-          id: msg.id.toString(),
-          role: msg.role,
-          content: msg.content,
-          kind: msg.kind || "text"
-        };
-
-        if (msg.kind === "analysis" && msg.metadata) {
-          try {
-            baseMsg.debugInfo = JSON.parse(msg.metadata);
-          } catch (e) {
-            console.error("Failed to parse analysis metadata", e);
-          }
-        }
-
-        if (baseMsg.kind === "text") {
-          const extracted = extractHtmlFromText(baseMsg.content);
-          const cleaned = stripHtmlFromText(baseMsg.content);
-          if (extracted) {
-            baseMsg.content = cleaned || "已生成卡片，请在画布查看。";
-          } else if (cleaned) {
-            baseMsg.content = cleaned;
-          }
-          uiMessages.push(baseMsg);
-          if (extracted) {
-            uiMessages.push({
-              id: `${baseMsg.id}-canvas`,
-              role: "ai",
-              content: "",
-              kind: "canvas",
-              canvasHtml: sanitizeHtml(extracted)
-            });
-          }
-        } else {
-          uiMessages.push(baseMsg);
-        }
-      });
-      
-      setMessages(uiMessages);
-    } catch (error) {
-      console.error("Load history error:", error);
-      // Fallback or error toast
-    }
+    await loadConversation(item.id);
   };
 
   const handleNewChat = () => {
@@ -178,18 +130,24 @@ export default function Page() {
     setMessages([]);
     setActiveToolId(null);
     setPendingToolTitle(null);
-    setSloganLines(["真正的清晰来自于减法，", "而不是堆叠"]);
+    setSloganLines(DEFAULT_SLOGAN);
     setToolsPanelOpen(false);
+    setSearchOpen(false);
+    setTargetMessageId(null);
   };
 
-  const toolIconMap: Record<string, ElementType> = {
-    target: Target,
-    stethoscope: Stethoscope
-  };
+  const handleSearchResultClick = async (conversationId: string, messageId: number) => {
+    // 1. Close search
+    setSearchOpen(false);
+    
+    // 2. Set conversation (this will trigger useChat hooks but we might need to manually load to ensure order)
+    setCurrentConversationId(conversationId);
+    
+    // 3. Set target message for scrolling
+    setTargetMessageId(messageId);
 
-  const generateToolSuffix = () => {
-    const value = crypto.getRandomValues(new Uint32Array(1))[0];
-    return value.toString(36).slice(0, 4).toUpperCase();
+    // 4. Load history
+    await loadConversation(conversationId);
   };
 
   const buildToolTitle = (tool: ExecutiveTool) => {
@@ -207,195 +165,65 @@ export default function Page() {
     setToolsPanelOpen(false);
   };
 
-  const handleToolClickById = (toolId: string) => {
-    const tool = executiveTools.find((item) => item.id === toolId);
-    if (!tool) return;
-    startToolSession(tool);
-  };
-
-  const handleFilesSelected = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
-    const allowedExtensions = ["pdf", "doc", "docx", "ppt", "pptx", "txt"];
-    const next: { name: string; type: string; text?: string }[] = [];
-    for (const file of Array.from(files)) {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "";
-      const isImage = file.type.startsWith("image/");
-      if (!isImage && !allowedExtensions.includes(ext)) {
-        continue;
-      }
-      if (ext === "txt") {
-        const text = await file.text();
-        next.push({ name: file.name, type: file.type || "text/plain", text });
-      } else {
-        next.push({ name: file.name, type: file.type || ext });
-      }
-    }
-    if (next.length > 0) {
-      setAttachments((prev) => [...prev, ...next]);
-    }
-  };
-
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const text = input.trim();
-    if (!text && attachments.length === 0) return;
-
-    const userMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "user",
-      content: text || "已上传附件",
-    };
-
-    const thinkingMessage: Message = {
-      id: crypto.randomUUID(),
-      role: "ai",
-      content: "",
-      kind: "thinking",
-    };
-
-    setMessages((prev) => [...prev, userMessage, thinkingMessage]);
-    setInput("");
-    setAttachments([]);
-
-    try {
-      const attachmentSummary = attachments.length
-        ? attachments
-            .map((item) =>
-              item.text
-                ? `- ${item.name}\n${item.text}`
-                : `- ${item.name} (${item.type})`
-            )
-            .join("\n")
-        : "";
-      const messageWithAttachments = attachmentSummary
-        ? `${text ? text : ""}\n\n[附件]\n${attachmentSummary}`.trim()
-        : text;
-      const res = await fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ 
-          message: messageWithAttachments, 
-          conversationId: currentConversationId,
-          toolId: activeToolId,
-          toolTitle: pendingToolTitle
-        }),
-      });
-      const data = await res.json();
-      
-      const responseId = crypto.randomUUID();
-      const analysisId = crypto.randomUUID();
-      const canvasId = crypto.randomUUID();
-      const extractedHtml = extractHtmlFromText(data.reply || "");
-      const cleanedReply = stripHtmlFromText(data.reply || "");
-      const replyText =
-        cleanedReply || (extractedHtml ? "已生成卡片，请在画布查看。" : "分析完成。");
-      
-      // Update state: Remove thinking, add Text Response, then add Analysis Card
-      setMessages((prev) => {
-        const filtered = prev.filter((message) => message.id !== thinkingMessage.id);
-        
-        // Critical: Render Analysis Card FIRST (before text reply) for logical flow, 
-        // or AFTER (as an appendix). User preference: "Process must be visible".
-        // Let's render it AFTER text for now, but ensure it's saved/loaded correctly.
-        // Actually, previous logic was Text then Analysis. Let's keep it consistent with DB.
-        
-        const newMessages: Message[] = [...filtered];
-
-        // 1. Add Text Response
-        newMessages.push({ id: responseId, role: "ai", content: replyText, kind: "text" });
-        
-        // 2. Add Analysis Card if debug_info exists
-        // NOTE: This relies on the API returning 'debug_info'. 
-        // We verified api/chat/route.ts returns { reply, debug_info: debugInfo }? 
-        // Let's double check API response structure.
-        if (data.debug_info) {
-           newMessages.push({
-             id: analysisId,
-             role: "ai",
-             content: "Full-Link Debug",
-             kind: "analysis",
-             debugInfo: data.debug_info
-           });
-        }
-        if (extractedHtml) {
-          newMessages.push({
-            id: canvasId,
-            role: "ai",
-            content: "",
-            kind: "canvas",
-            canvasHtml: sanitizeHtml(extractedHtml)
-          });
-        }
-        return newMessages;
-      });
-
-      startTypewriter(responseId, replyText);
-      if (pendingToolTitle) {
-        setPendingToolTitle(null);
-      }
-      
-      // Silent History Refresh to update sidebar
-      fetchHistory();
-
-    } catch (error) {
-      console.error("Chat error:", error);
-      const responseId = crypto.randomUUID();
-      setMessages((prev) => [
-        ...prev.filter((message) => message.id !== thinkingMessage.id),
-        { id: responseId, role: "ai", content: "抱歉，系统出现了一些问题，请稍后再试。", kind: "text" },
-      ]);
-    }
-  };
-
   return (
     <div className="h-screen overflow-hidden bg-white text-[#060E9F]">
-      {/* Fixed Toggle Button (Only visible when sidebar is closed) */}
-      {!sidebarOpen && (
-        <div className="fixed left-4 top-4 z-20 flex items-center gap-3">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="flex h-10 w-10 items-center justify-center rounded-full border border-[#060E9F]/10 bg-white text-[#060E9F] shadow-sm hover:bg-gray-50"
-            aria-label="open sidebar"
-          >
-            <span className="text-lg">☰</span>
-          </button>
-        </div>
-      )}
-
       <div className="flex h-full">
-        <Sidebar 
-          isOpen={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-          history={history}
-          historyLoading={historyLoading}
-          onHistoryClick={handleHistoryClick}
-          onNewChat={handleNewChat}
-          onOpenToolLibrary={() => {
-            setToolsPanelOpen((prev) => {
-              const next = !prev;
-              if (next) {
-                setSloganLines(["站得更高，", "才能看得更远"]);
-              } else if (activeToolId) {
-                const tool = executiveTools.find((t) => t.id === activeToolId);
-                if (tool) {
-                  setSloganLines(tool.slogan);
-                }
-              } else {
-                setSloganLines(["真正的清晰来自于减法，", "而不是堆叠"]);
-              }
-              return next;
-            });
-          }}
-          onToolClick={handleToolClickById}
-        />
+      <Sidebar
+        isOpen={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+        history={history}
+        historyLoading={historyLoading}
+        onHistoryClick={handleHistoryClick}
+        onNewChat={handleNewChat}
+        onOpenToolLibrary={() => setToolsPanelOpen(true)}
+        onToolClick={(toolId) => {
+          const tool = executiveTools.find(t => t.id === toolId);
+          if (tool) {
+            startToolSession(tool);
+          }
+        }}
+        activeConversationId={currentConversationId}
+        onSearchClick={() => setSearchOpen(true)}
+      />
 
-        <div className="flex flex-1 flex-col h-full overflow-y-auto">
-          <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col px-4">
-            <WelcomeHeader titleLines={sloganLines} />
+      <main className="flex-1 flex flex-col relative bg-white dark:bg-gray-900 overflow-hidden transition-colors duration-200">
+        
+        {/* Main Content Area */}
+        {searchOpen ? (
+          <SearchInterface 
+            onClose={() => setSearchOpen(false)}
+            onResultClick={handleSearchResultClick}
+          />
+        ) : (
+          <>
+            <div className="absolute top-4 left-4 z-20 flex items-center">
+             {!sidebarOpen && (
+              <button
+                onClick={() => setSidebarOpen(true)}
+                className="flex h-10 w-10 items-center justify-center rounded-full border border-[#060E9F]/10 bg-white text-[#060E9F] shadow-sm hover:bg-gray-50 mr-2"
+                aria-label="open sidebar"
+              >
+                <span className="text-lg">☰</span>
+              </button>
+            )}
+            <ProjectLogo className="w-10 h-10 md:w-12 md:h-12" />
+          </div>
 
-            <main className="flex-1 pb-36 pt-10">
+          <div className="absolute top-4 right-4 z-20">
+            <UserMenu />
+          </div>
+
+          <div className="z-10 w-full bg-white/95 backdrop-blur-sm shadow-sm pt-14 md:pt-0">
+            <div className="mx-auto w-full max-w-4xl px-4">
+              <WelcomeHeader titleLines={sloganLines} />
+            </div>
+          </div>
+
+          <div className="flex-1 overflow-y-auto">
+            <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col px-4">
+              <div className="flex-1 pb-36 pt-4">
               <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
-                {toolsPanelOpen && (
+                {toolsPanelOpen ? (
                   <div className="w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                     <div className="text-xs font-bold uppercase tracking-wider text-gray-500">
                       高管思维工具库
@@ -422,37 +250,49 @@ export default function Page() {
                       })}
                     </div>
                   </div>
-                )}
-
-                {messages.length === 0 ? (
-                  <div className="mt-12 text-center text-sm font-serif text-[#060E9F]/30 animate-in fade-in duration-1000">
-                    这里是你的安全思考空间
-                  </div>
                 ) : (
-                  messages.map((message) => (
-                    <ChatMessage key={message.id} message={message} />
-                  ))
+                  <>
+                    {messages.length === 0 ? (
+                      <div className="mt-12 text-center text-sm font-serif text-[#060E9F]/30 animate-in fade-in duration-1000">
+                        这里是你的安全思考空间
+                      </div>
+                    ) : (
+                      messages.map((message) => (
+                        <div key={message.id} id={`message-${message.id}`}>
+                          <ChatMessage message={message} />
+                        </div>
+                      ))
+                    )}
+                    <div ref={endRef} />
+                  </>
                 )}
-                <div ref={endRef} />
               </div>
-            </main>
+            </div>
+            </div>
           </div>
-        </div>
+          </>
+        )}
+      </main>
       </div>
 
+      {!toolsPanelOpen && (
       <div
-        className={`fixed bottom-0 right-0 border-t border-[#060E9F]/10 bg-white ${
-          sidebarOpen ? "left-[260px]" : "left-0"
+        className={`fixed bottom-0 right-0 z-50 border-t border-[#060E9F]/10 bg-white transition-[left] duration-300 left-0 ${
+          sidebarOpen ? "md:left-[260px]" : ""
         }`}
       >
         <ChatInput 
           input={input}
           setInput={setInput}
-          onSubmit={handleSubmit}
+          onSubmit={sendMessage}
           onFilesSelected={handleFilesSelected}
           canSubmit={Boolean(input.trim() || attachments.length > 0)}
+          selectedModel={selectedModel}
+          onModelChange={setSelectedModel}
         />
       </div>
+      )}
+      <AuthModal isOpen={showAuthModal} onClose={() => setShowAuthModal(false)} />
     </div>
   );
 }

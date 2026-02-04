@@ -1,12 +1,16 @@
 import { useState, useEffect, useRef } from "react";
 import type { ElementType } from "react";
 import { HistoryItem } from "@/lib/types";
-import { MoreHorizontal, Pin, Pencil, Trash2, Calendar, Clock, Target, Stethoscope } from "lucide-react";
+import { MoreHorizontal, Pin, Pencil, Trash2, Calendar, Clock, Settings, X, Search } from "lucide-react";
 import { SettingsModal } from "./SettingsModal";
 import { ExecutiveTools } from "./ExecutiveTools";
 import { executiveTools } from "@/lib/executive_tools";
+import { toolIconMap } from "@/app/components/Icons";
+import { ProjectLogo } from "./ProjectLogo";
+import { useLanguage } from "@/context/language-context";
+import { formatDateTime } from "@/lib/utils";
 
-interface SidebarProps {
+type SidebarProps = {
   isOpen: boolean;
   onClose: () => void;
   history: HistoryItem[];
@@ -15,6 +19,8 @@ interface SidebarProps {
   onNewChat: () => void;
   onOpenToolLibrary: () => void;
   onToolClick: (toolId: string) => void;
+  activeConversationId: string | null;
+  onSearchClick: () => void;
 }
 
 export function Sidebar({
@@ -25,21 +31,18 @@ export function Sidebar({
   onHistoryClick,
   onNewChat,
   onOpenToolLibrary,
-  onToolClick
+  onToolClick,
+  activeConversationId,
+  onSearchClick
 }: SidebarProps) {
+  const { t, language } = useLanguage();
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   
   // Local state for history management (Rename/Delete)
   const [localHistory, setLocalHistory] = useState<HistoryItem[]>([]);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
-  
-  const toolIconMap: Record<string, ElementType> = {
-    grow: Target,
-    "team-diagnosis": Stethoscope
-  };
 
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -65,7 +68,9 @@ export function Sidebar({
     // Optimistic update
     setLocalHistory(prev => prev.filter(item => item.id !== id));
     setOpenMenuId(null);
-    if (activeId === id) setActiveId(null);
+    if (activeConversationId === id) {
+      // Don't modify parent state from here, just let it persist until deleted on server or parent update
+    }
 
     try {
       await fetch(`/api/history/${id}`, { method: 'DELETE' });
@@ -97,12 +102,27 @@ export function Sidebar({
     }
   };
 
-  if (!isOpen) return null;
-
   return (
     <>
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div 
+          className="fixed inset-0 z-[55] bg-black/20 backdrop-blur-sm md:hidden"
+          onClick={onClose}
+        />
+      )}
+
       <SettingsModal isOpen={isSettingsOpen} onClose={() => setIsSettingsOpen(false)} />
-      <aside className="flex h-full w-[260px] shrink-0 flex-col border-r border-gray-200 bg-[#F8F9FA] dark:bg-gray-900 dark:border-gray-800 px-3 py-4 transition-colors duration-200 font-sans">
+      {/* Sidebar Container */}
+      <aside 
+        className={`
+          fixed inset-y-0 left-0 z-[60] flex h-full w-[260px] shrink-0 flex-col 
+          border-r border-gray-200 bg-[#F8F9FA] dark:bg-gray-900 dark:border-gray-800 
+          px-3 py-4 transition-transform duration-300 ease-in-out font-sans 
+          md:static md:translate-x-0 md:flex
+          ${isOpen ? "translate-x-0 shadow-2xl md:shadow-none" : "-translate-x-full md:hidden"}
+        `}
+      >
       {/* Sidebar Header: Toggle + Search */}
       <div className="flex items-center justify-between mb-6 px-1">
         <button
@@ -110,54 +130,53 @@ export function Sidebar({
           className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
           aria-label="close sidebar"
         >
-          <span className="text-lg">☰</span>
+          {/* Use X icon for close action on mobile/desktop sidebar */}
+          <X className="h-5 w-5" />
         </button>
         <button
-          className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
+          onClick={onSearchClick}
+          className="flex h-9 w-9 items-center justify-center rounded-full text-gray-600 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800 transition-colors"
           aria-label="search"
         >
-          <svg
-            aria-hidden
-            viewBox="0 0 24 24"
-            className="h-4 w-4"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <line x1="20" y1="20" x2="16.5" y2="16.5" />
-          </svg>
+          <Search className="h-5 w-5" />
         </button>
       </div>
 
       <button
-        onClick={onNewChat}
+        onClick={() => {
+          onNewChat();
+          if (window.innerWidth < 768) onClose();
+        }}
         className="w-full flex items-center justify-start gap-3 bg-[#060E9F] text-white py-2.5 px-4 rounded-full shadow-sm hover:shadow-md hover:bg-[#060E9F]/90 transition-all mb-2 mx-1"
       >
         <Pencil className="w-4 h-4" />
-        <span className="text-sm font-semibold">发起新对话</span>
+        <span className="text-sm font-semibold">{t('newChat')}</span>
       </button>
 
       {/* Executive Thinking Tools Module */}
       <ExecutiveTools 
         tools={executiveTools}
-        onOpenLibrary={onOpenToolLibrary}
-        onToolClick={(tool) => onToolClick(tool.id)}
+        onOpenLibrary={() => {
+          onOpenToolLibrary();
+          if (window.innerWidth < 768) onClose();
+        }}
+        onToolClick={(tool) => {
+          onToolClick(tool.id);
+          if (window.innerWidth < 768) onClose();
+        }}
       />
 
       <div className="mt-2 flex-1 space-y-1 overflow-y-auto px-1">
-        <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
-          近期对话
-        </div>
+        <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider sticky top-0 bg-[#F8F9FA] dark:bg-gray-900 z-10">
+        {t('recentChats')}
+      </div>
         {historyLoading ? (
           <div className="px-3 py-2 text-sm text-gray-400 animate-pulse">
-            加载中...
+            {t('loading')}
           </div>
         ) : (
           localHistory.map((item) => {
-            const isActive = activeId === item.id;
+            const isActive = activeConversationId === item.id;
             const isEditing = editingId === item.id;
             
             return (
@@ -170,8 +189,8 @@ export function Sidebar({
                 }`}
                 onClick={() => {
                   if (!isEditing) {
-                    setActiveId(item.id);
                     onHistoryClick(item);
+                    if (window.innerWidth < 768) onClose();
                   }
                 }}
               >
@@ -226,19 +245,19 @@ export function Sidebar({
                       className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                       onClick={() => setOpenMenuId(null)}
                     >
-                      <Pin className="w-3 h-3" /> 固定
+                      <Pin className="w-3 h-3" /> {t('pin')}
                     </button>
                     <button 
                       className="w-full text-left px-3 py-2 text-xs text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 flex items-center gap-2"
                       onClick={() => handleStartRename(item.id, item.title)}
                     >
-                      <Pencil className="w-3 h-3" /> 重命名
+                      <Pencil className="w-3 h-3" /> {t('rename')}
                     </button>
                     <button 
                       className="w-full text-left px-3 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
                       onClick={() => handleDelete(item.id)}
                     >
-                      <Trash2 className="w-3 h-3" /> 删除
+                      <Trash2 className="w-3 h-3" /> {t('delete')}
                     </button>
                     
                     {/* Metadata Section */}
@@ -246,13 +265,13 @@ export function Sidebar({
                       <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-[#060E9F]/5 dark:bg-blue-900/20 text-[#060E9F] dark:text-blue-300" title="创建时间">
                          <Calendar className="w-3.5 h-3.5 opacity-80" />
                          <span className="text-[10px] font-medium tracking-tight">
-                           {new Date(item.created_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//g, '-')}
+                           {formatDateTime(item.created_at, language)}
                          </span>
                       </div>
                       <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-[#FFBF3F]/15 dark:bg-amber-900/20 text-[#B45309] dark:text-amber-400" title="更新时间">
                          <Clock className="w-3.5 h-3.5 opacity-80" />
                          <span className="text-[10px] font-medium tracking-tight">
-                           {item.updated_at ? new Date(item.updated_at).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).replace(/\//g, '-') : '刚刚'}
+                           {item.updated_at ? formatDateTime(item.updated_at, language) : '刚刚'}
                          </span>
                       </div>
                     </div>
@@ -264,15 +283,15 @@ export function Sidebar({
         )}
       </div>
 
-      <div className="mt-auto border-t border-gray-100 dark:border-gray-800 pt-4 px-1">
+      <div className="mt-auto border-t border-gray-100 dark:border-gray-800 pt-4 px-1 space-y-1">
         <button 
           onClick={() => setIsSettingsOpen(true)}
           className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
         >
           <div className="h-8 w-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-400">
-            <span className="text-xs">👤</span>
+            <Settings className="w-4 h-4" />
           </div>
-          <div className="text-sm font-medium">设置</div>
+          <div className="text-sm font-medium">{t('settings')}</div>
         </button>
       </div>
     </aside>

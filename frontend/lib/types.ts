@@ -16,6 +16,12 @@ export type UserProfile = {
 };
 
 export type DebugInfo = {
+  config_provider?: string;
+  model_info?: {
+      stage1: string;
+      stage3: string;
+      stage4: string;
+  };
   stage1: {
     intent: "DECISION" | "EMOTIONAL" | "QUERY" | "CHAT";
     sentiment: string;

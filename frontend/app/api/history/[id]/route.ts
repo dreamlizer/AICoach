@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { getMessagesFromDb, deleteConversation } from "@/lib/db";
+import { getMessagesFromDb, deleteConversation, getConversationById } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,15 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   const conversationId = params.id;
+  
+  // Check ownership
+  const user = getCurrentUser();
+  const conversation = getConversationById(conversationId);
+  
+  if (conversation && conversation.user_id && (!user || user.id !== conversation.user_id)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
   try {
     deleteConversation(conversationId);
     return NextResponse.json({ success: true });
@@ -23,6 +33,14 @@ export async function GET(
 ) {
   const conversationId = params.id;
   
+  // Check ownership
+  const user = getCurrentUser();
+  const conversation = getConversationById(conversationId);
+  
+  if (conversation && conversation.user_id && (!user || user.id !== conversation.user_id)) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
   try {
     // 100 is a reasonable limit for now to load full history of a session
     const rawMessages = getMessagesFromDb(conversationId, 100); 
