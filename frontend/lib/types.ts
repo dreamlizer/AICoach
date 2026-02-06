@@ -50,11 +50,12 @@ export type HistoryItem = {
   created_at: string;
   updated_at?: string;
   tool_id?: string | null;
+  user_id?: number | null;
 };
 
 export interface Stage1Analysis {
-  intent: "DECISION" | "EMOTIONAL" | "QUERY" | "CHAT";
+  intent: "DECISION" | "EMOTIONAL" | "QUERY" | "CHAT" | "tool_execution";
   sentiment: string;
-  complexity: "HIGH" | "LOW";
+  complexity: "HIGH" | "LOW" | "high" | "low";
   keywords: string[];
 }

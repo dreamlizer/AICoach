@@ -1,6 +1,11 @@
-import { GrowCardPayload } from "./index";
-
-export type { GrowCardPayload };
+export interface GrowCardPayload {
+  goal: string;
+  reality: string[];
+  options: string[];
+  will: string[];
+  sloganCn?: string;
+  footerSub?: string;
+}
 
 export const SAMPLE_CASE = `
 案例背景：

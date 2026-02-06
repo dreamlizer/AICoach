@@ -233,7 +233,7 @@ export async function generateTitle(userMessage: string, aiReply: string, config
     // Use STAGE1 settings (usually faster/cheaper model) for this simple task
     const { modelProvider, apiKey, modelName, reasoningEffort } = config.stage1;
     const title = await callAIModel(modelProvider, apiKey, prompt, modelName, "New Chat", reasoningEffort);
-    return title.replace(/["《》]/g, "").trim().slice(0, 15);
+    return title.content.replace(/["《》]/g, "").trim().slice(0, 15);
   } catch (e) {
     console.error("Title Generation Failed:", e);
     return "";

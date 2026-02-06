@@ -185,9 +185,7 @@ export function AuthModal({ isOpen, onClose }: AuthModalProps) {
         return; // Don't close modal immediately, let user login
       }
       
-      if (mode !== "forgot-password") {
-        onClose();
-      }
+      onClose();
     } catch (err: any) {
       setError(err.message);
     } finally {

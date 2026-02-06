@@ -1,6 +1,15 @@
 import path from "path";
 import { UserProfile } from "./types";
 
+export interface User {
+  id: number;
+  email: string;
+  name?: string;
+  avatar?: string;
+  created_at: string;
+  password_hash?: string;
+}
+
 type DatabaseStatement = {
   all: (...args: unknown[]) => unknown[];
   get: (...args: unknown[]) => unknown;
@@ -292,18 +301,18 @@ export const verifyCode = (email: string, code: string): boolean => {
   return false;
 };
 
-export const getOrCreateUser = (email: string, name?: string) => {
+export const getOrCreateUser = (email: string, name?: string): User => {
   const db = getDb();
   const now = new Date().toISOString();
   
-  let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as any;
+  let user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as User | undefined;
   
   if (!user) {
     // Only used for OTP login where we might implicitly create user if we want
     // But now we prefer explicit registration. 
     // This function is kept for backward compatibility with pure OTP login if we still support it as "magic link" style
     db.prepare("INSERT INTO users (email, name, created_at) VALUES (?, ?, ?)").run(email, name || email.split('@')[0], now);
-    user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+    user = db.prepare("SELECT * FROM users WHERE email = ?").get(email) as User;
   } else if (name && !user.name) {
     // Backfill name if missing and provided
     db.prepare("UPDATE users SET name = ? WHERE id = ?").run(name, user.id);
@@ -313,13 +322,13 @@ export const getOrCreateUser = (email: string, name?: string) => {
   return user;
 };
 
-export const createUserWithPassword = (email: string, passwordHash: string, name: string) => {
+export const createUserWithPassword = (email: string, passwordHash: string, name: string): User | undefined => {
   const db = getDb();
   const now = new Date().toISOString();
   
   try {
     db.prepare("INSERT INTO users (email, password_hash, name, created_at) VALUES (?, ?, ?, ?)").run(email, passwordHash, name, now);
-    return db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+    return db.prepare("SELECT * FROM users WHERE email = ?").get(email) as User | undefined;
   } catch (err: any) {
     if (err.message.includes("UNIQUE constraint failed")) {
       throw new Error("User already exists");
@@ -328,9 +337,9 @@ export const createUserWithPassword = (email: string, passwordHash: string, name
   }
 };
 
-export const getUserByEmail = (email: string) => {
+export const getUserByEmail = (email: string): User | undefined => {
   const db = getDb();
-  return db.prepare("SELECT * FROM users WHERE email = ?").get(email);
+  return db.prepare("SELECT * FROM users WHERE email = ?").get(email) as User | undefined;
 };
 
 export const updateUserPassword = (userId: number, passwordHash: string) => {
@@ -338,7 +347,7 @@ export const updateUserPassword = (userId: number, passwordHash: string) => {
   db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(passwordHash, userId);
 };
 
-export const updateUserProfile = (userId: number, updates: { name?: string; avatar?: string }) => {
+export const updateUserProfile = (userId: number, updates: { name?: string; avatar?: string }): User | undefined => {
   const db = getDb();
   const { name, avatar } = updates;
   
@@ -349,7 +358,7 @@ export const updateUserProfile = (userId: number, updates: { name?: string; avat
     db.prepare("UPDATE users SET avatar = ? WHERE id = ?").run(avatar, userId);
   }
   
-  return db.prepare("SELECT * FROM users WHERE id = ?").get(userId);
+  return db.prepare("SELECT * FROM users WHERE id = ?").get(userId) as User | undefined;
 };
 
 // Helper to save a message
