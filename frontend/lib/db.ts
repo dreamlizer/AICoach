@@ -1,4 +1,5 @@
 import path from "path";
+import Database from "better-sqlite3";
 import { UserProfile } from "./types";
 
 export interface User {
@@ -10,42 +11,32 @@ export interface User {
   password_hash?: string;
 }
 
-type DatabaseStatement = {
-  all: (...args: unknown[]) => unknown[];
-  get: (...args: unknown[]) => unknown;
-  run: (...args: unknown[]) => unknown;
-};
-
-type DatabaseSync = {
-  exec: (sql: string) => void;
-  prepare: (sql: string) => DatabaseStatement;
-};
-
-const { DatabaseSync } = require("node:sqlite") as { DatabaseSync: new (path: string) => DatabaseSync };
+// Better-sqlite3 types
+type DatabaseInstance = import("better-sqlite3").Database;
 
 const dbPath = path.join(process.cwd(), "sqlite.db");
 
 // Use a global variable to store the database instance in development
 // to prevent multiple connections during hot reloading
 const globalForDb = global as unknown as { 
-  dbInstance: DatabaseSync | undefined;
+  dbInstance: DatabaseInstance | undefined;
   isInitialized: boolean | undefined;
 };
 
 export const getDb = () => {
   if (!globalForDb.dbInstance) {
-    globalForDb.dbInstance = new DatabaseSync(dbPath);
+    globalForDb.dbInstance = new Database(dbPath);
     initializeSchema(globalForDb.dbInstance);
     globalForDb.isInitialized = true;
   } else if (!globalForDb.isInitialized) {
     // Fallback: ensure schema is initialized if instance exists but flag is missing (e.g. hot reload)
-    initializeSchema(globalForDb.dbInstance);
+    initializeSchema(globalForDb.dbInstance!);
     globalForDb.isInitialized = true;
   }
-  return globalForDb.dbInstance;
+  return globalForDb.dbInstance!;
 };
 
-const initializeSchema = (db: DatabaseSync) => {
+const initializeSchema = (db: DatabaseInstance) => {
   db.exec(
     `CREATE TABLE IF NOT EXISTS conversations (
        id TEXT PRIMARY KEY, 
