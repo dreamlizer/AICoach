@@ -68,7 +68,7 @@ export function Sidebar({
     setLocalHistory(prev => prev.filter(item => item.id !== id));
     setOpenMenuId(null);
     if (activeConversationId === id) {
-      // Don't modify parent state from here, just let it persist until deleted on server or parent update
+      onNewChat();
     }
 
     try {

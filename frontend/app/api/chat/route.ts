@@ -11,6 +11,34 @@ import { getCurrentUser } from "@/lib/session";
 import fs from "fs";
 import path from "path";
 
+// [CRITICAL] Manual Environment Loader for Server-Side Route
+function loadServerEnv() {
+  const keys = {
+    deepseek: process.env.DEEPSEEK_API_KEY || "",
+    doubao: process.env.DOUBAO_API_KEY || ""
+  };
+
+  // If missing, try manual read from .env.local
+  if (!keys.deepseek || !keys.doubao) {
+    try {
+      const envPath = path.resolve(process.cwd(), '.env.local');
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, 'utf-8');
+        content.split('\n').forEach(line => {
+          const [k, ...v] = line.trim().split('=');
+          if (!k || line.trim().startsWith('#')) return;
+          const val = v.join('=').trim();
+          if (k === 'DEEPSEEK_API_KEY' && !keys.deepseek) keys.deepseek = val;
+          if (k === 'DOUBAO_API_KEY' && !keys.doubao) keys.doubao = val;
+        });
+      }
+    } catch (e) {
+      console.error("[EnvLoader] Failed to read local env:", e);
+    }
+  }
+  return keys;
+}
+
 // Helper to encode streaming data
 function encodeChunk(data: any) {
   return new TextEncoder().encode(JSON.stringify(data) + "\n");
@@ -53,7 +81,17 @@ export async function POST(request: Request) {
     }
 
     // Get Dynamic Configuration based on user selection
-    const config = getModelConfig((modelProvider as ModelProvider) || "deepseek");
+    const runtimeKeys = loadServerEnv();
+    const config = getModelConfig((modelProvider as ModelProvider) || "deepseek", runtimeKeys);
+
+    // [DEBUG DIAGNOSTIC] Check API Keys
+    const s1Key = config.stage1.apiKey;
+    console.log(`[API CHECK] Provider: ${config.provider}`);
+    console.log(`[API CHECK] Stage1 Key Status: ${s1Key ? `Present (Starts with ${s1Key.slice(0, 8)}...)` : 'MISSING/EMPTY'}`);
+    if (!s1Key) {
+        console.error("[CRITICAL] API Key is missing. Please check .env.local file.");
+    }
+    // [END DEBUG]
 
     // 1. Save User Message to DB
     try {

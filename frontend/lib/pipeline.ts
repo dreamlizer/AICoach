@@ -31,6 +31,30 @@ async function callAIModel(
   errorMessage: string = "AI Service Error",
   reasoningEffort: "low" | "medium" | "high" | "minimal" | null = null
 ): Promise<AIModelResult> {
+  // [DIAGNOSTIC] Check Environment
+  const fs = require('fs');
+  const path = require('path');
+  console.log(`[API CHECK] Provider: ${modelType}`);
+  console.log(`[API CHECK] CWD: ${process.cwd()}`);
+  
+  const envPath = path.resolve(process.cwd(), '.env.local');
+  const envExists = fs.existsSync(envPath);
+  console.log(`[API CHECK] .env.local exists: ${envExists} at ${envPath}`);
+  
+  if (envExists) {
+     try {
+        const envContent = fs.readFileSync(envPath, 'utf-8');
+        // Check for DeepSeek key specifically in file content (safe check)
+        const hasDSKey = envContent.includes('DEEPSEEK_API_KEY=');
+        console.log(`[API CHECK] .env.local content check: Has DEEPSEEK_API_KEY? ${hasDSKey}`);
+     } catch (e) {
+        console.error("[API CHECK] Failed to read .env.local:", e);
+     }
+  }
+
+  console.log(`[API CHECK] process.env.DEEPSEEK_API_KEY (runtime): ${process.env.DEEPSEEK_API_KEY ? 'Present' : 'Missing'}`);
+  console.log(`[API CHECK] Passed apiKey arg: ${apiKey ? "Present (Starts with " + apiKey.substring(0, 8) + "...)" : "MISSING/EMPTY"}`);
+
   if (!apiKey) throw new Error(`${modelType} API Key is missing`);
 
   let baseURL = "https://api.deepseek.com"; // Default to DeepSeek

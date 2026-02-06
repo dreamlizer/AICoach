@@ -21,11 +21,6 @@ export const MODEL_ID_DOUBAO_DEFAULT = "doubao-seed-1-8-251228"; // 来自您的
 
 export type ModelProvider = "deepseek" | "doubao";
 
-const MODEL_API_KEYS: Record<ModelProvider, string> = {
-  deepseek: COMMON_DEEPSEEK_KEY,
-  doubao: COMMON_DOUBAO_KEY
-};
-
 // ----------------------------------------------------------------------------------
 // 2. Stage Settings (阶段配置)
 // ----------------------------------------------------------------------------------
@@ -263,21 +258,27 @@ export interface PipelineConfig {
   stage5: SingleStageConfig;
 }
 
-export function getModelConfig(selectedProvider: ModelProvider): PipelineConfig {
-  const commonKey = MODEL_API_KEYS[selectedProvider];
+export function getModelConfig(selectedProvider: ModelProvider, runtimeKeys?: { deepseek: string, doubao: string }): PipelineConfig {
+  // Use injected keys if provided, otherwise fallback to process.env (legacy)
+  const keys = runtimeKeys || {
+    deepseek: process.env.DEEPSEEK_API_KEY || COMMON_DEEPSEEK_KEY || "",
+    doubao: process.env.DOUBAO_API_KEY || COMMON_DOUBAO_KEY || ""
+  };
+  
+  const commonKey = keys[selectedProvider];
 
   // Helper to create specific model configs
   const createDoubaoConfig = (reasoning: boolean): SingleStageConfig => ({
     modelProvider: "doubao",
     modelName: MODEL_ID_DOUBAO_DEFAULT,
-    apiKey: MODEL_API_KEYS.doubao,
+    apiKey: keys.doubao,
     reasoningEffort: reasoning ? "low" : null
   });
 
   const createDeepseekConfig = (reasoning: boolean): SingleStageConfig => ({
     modelProvider: "deepseek",
     modelName: reasoning ? MODEL_ID_DEEPSEEK_REASONER : MODEL_ID_DEEPSEEK_CHAT,
-    apiKey: MODEL_API_KEYS.deepseek,
+    apiKey: keys.deepseek,
     reasoningEffort: null
   });
 

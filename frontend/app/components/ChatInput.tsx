@@ -137,7 +137,7 @@ export function ChatInput({
               }
             }
           }}
-          className="w-full resize-none bg-transparent px-4 pt-4 pb-2 text-base leading-relaxed text-black placeholder:text-[#060E9F]/40 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full resize-none bg-transparent px-4 py-3 text-base leading-relaxed text-black placeholder:text-[#060E9F]/40 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
         
         <div className="flex items-center justify-between px-3 pb-3 pt-1">
