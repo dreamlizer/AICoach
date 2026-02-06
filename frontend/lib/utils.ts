@@ -94,26 +94,25 @@ export function processHistoryMessage(msg: any): Message[] {
 
   const uiMessages: Message[] = [];
 
-  if (baseMsg.kind === "text") {
+  if (msg.kind === "text") {
     const extracted = extractHtmlFromText(baseMsg.content);
     const cleaned = stripHtmlFromText(baseMsg.content);
     
     if (extracted) {
-      baseMsg.content = cleaned || "已生成卡片，请在画布查看。";
-    } else if (cleaned) {
-      baseMsg.content = cleaned;
-    }
-    
-    uiMessages.push(baseMsg);
-    
-    if (extracted) {
       uiMessages.push({
-        id: `${baseMsg.id}-canvas`,
-        role: "ai",
-        content: "",
-        kind: "canvas",
-        canvasHtml: extracted.trim()
+        ...baseMsg,
+        content: cleaned,
+        kind: "text"
       });
+      uiMessages.push({
+        id: (parseInt(baseMsg.id) + 1).toString(), // temporary fake id
+        role: "ai",
+        content: extracted,
+        kind: "html",
+        status: "done"
+      });
+    } else {
+      uiMessages.push(baseMsg);
     }
   } else {
     uiMessages.push(baseMsg);
@@ -121,3 +120,15 @@ export function processHistoryMessage(msg: any): Message[] {
 
   return uiMessages;
 }
+
+export function generateUUID() {
+  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+    return crypto.randomUUID();
+  }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    var r = Math.random() * 16 | 0,
+      v = c == 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+

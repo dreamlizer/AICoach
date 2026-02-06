@@ -7,7 +7,7 @@ import { WelcomeHeader } from "@/app/components/WelcomeHeader";
 import { ChatInput } from "@/app/components/ChatInput";
 import { toolIconMap } from "@/app/components/Icons";
 import { executiveTools, ExecutiveTool } from "@/lib/executive_tools";
-import { generateToolSuffix } from "@/lib/utils";
+import { generateToolSuffix, generateUUID } from "@/lib/utils";
 import { useChat } from "@/hooks/useChat";
 import { useHistory } from "@/hooks/useHistory";
 import { Message, HistoryItem } from "@/lib/types";
@@ -86,7 +86,7 @@ export default function Page() {
       setCurrentConversationId(urlId);
       loadConversation(urlId).finally(() => setIsInitializing(false));
     } else {
-      setCurrentConversationId(crypto.randomUUID());
+      setCurrentConversationId(generateUUID());
       setIsInitializing(false);
     }
 

@@ -3,6 +3,8 @@ import { searchMessages, getUserByEmail } from "@/lib/db";
 import { cookies } from "next/headers";
 import jwt from "jsonwebtoken";
 
+export const dynamic = 'force-dynamic';
+
 const JWT_SECRET = process.env.JWT_SECRET || "default-secret-key";
 
 export async function GET(request: Request) {

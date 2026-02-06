@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react";
 import { Message } from "@/lib/types";
-import { extractHtmlFromText, stripHtmlFromText, processHistoryMessage } from "@/lib/utils";
+import { extractHtmlFromText, stripHtmlFromText, processHistoryMessage, generateUUID } from "@/lib/utils";
 import { ModelProvider } from "@/lib/stage_settings";
 import { usePreferences } from "@/context/preferences-context";
 
@@ -134,13 +134,13 @@ export function useChat(
       : text;
 
     const userMessage: Message = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       role: "user",
       content: messageWithAttachments || "已上传附件",
     };
 
     const thinkingMessage: Message = {
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       role: "ai",
       content: "",
       kind: "thinking",
