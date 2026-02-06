@@ -7,6 +7,7 @@ import { AuthModal } from "./AuthModal";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { SettingsModal } from "./SettingsModal";
 import { useLanguage } from "@/context/language-context";
+import Image from "next/image";
 
 export function UserMenu() {
   const { user, logout, updateProfile, loading } = useAuth();
@@ -100,7 +101,13 @@ export function UserMenu() {
           {user.name || user.email.split('@')[0]}
         </span>
         {user.avatar ? (
-          <img src={user.avatar} alt="Avatar" className="h-8 w-8 rounded-full object-cover border border-[#060E9F]/20" />
+          <Image 
+            src={user.avatar} 
+            alt="Avatar" 
+            width={32} 
+            height={32} 
+            className="rounded-full object-cover border border-[#060E9F]/20" 
+          />
         ) : (
           <div className="h-8 w-8 rounded-full bg-[#060E9F]/10 text-[#060E9F] flex items-center justify-center font-bold text-sm border border-[#060E9F]/20">
             {user.name ? user.name[0].toUpperCase() : user.email[0].toUpperCase()}
@@ -115,7 +122,13 @@ export function UserMenu() {
             <div className="flex items-center gap-3 mb-2">
               <div className="relative group/avatar cursor-pointer" onClick={handleAvatarClick}>
                  {user.avatar ? (
-                   <img src={user.avatar} alt="Avatar" className="h-10 w-10 rounded-full object-cover" />
+                   <Image 
+                     src={user.avatar} 
+                     alt="Avatar" 
+                     width={40} 
+                     height={40} 
+                     className="rounded-full object-cover" 
+                   />
                  ) : (
                    <div className="h-10 w-10 rounded-full bg-[#060E9F]/10 text-[#060E9F] flex items-center justify-center font-bold text-lg">
                       {user.name ? user.name[0].toUpperCase() : user.email[0].toUpperCase()}

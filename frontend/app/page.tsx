@@ -109,6 +109,7 @@ export default function Page() {
     } else {
        setSloganLines([content, ""]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Sync URL with conversation ID
@@ -144,6 +145,7 @@ export default function Page() {
         title: `${user.name}，${prev.title.split('，').pop() || prev.title}`
       } : null);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.name]);
 
   // Merge anonymous conversation on login

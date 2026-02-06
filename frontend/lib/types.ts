@@ -23,9 +23,9 @@ export type DebugInfo = {
       stage4: string;
   };
   stage1: {
-    intent: "DECISION" | "EMOTIONAL" | "QUERY" | "CHAT";
+    intent: "DECISION" | "EMOTIONAL" | "QUERY" | "CHAT" | "tool_execution";
     sentiment: string;
-    complexity: "HIGH" | "LOW";
+    complexity: "HIGH" | "LOW" | "high" | "low";
     keywords: string[];
   };
   stage2_memory: string;

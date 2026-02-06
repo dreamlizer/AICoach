@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { saveVerificationCode, getUserByEmail } from "@/lib/db";
+import { saveVerificationCode, getUserByEmail, User } from "@/lib/db";
 import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
@@ -11,7 +11,8 @@ export async function POST(request: Request) {
     }
 
     // Check user existence based on flow type
-    const user = getUserByEmail(email);
+    // Explicitly cast or type the user to avoid 'type {}' inference issues in some environments
+    const user: User | undefined = getUserByEmail(email);
 
     if (type === "register" && user) {
       return NextResponse.json({ error: "该邮箱已注册，请直接登录" }, { status: 400 });
