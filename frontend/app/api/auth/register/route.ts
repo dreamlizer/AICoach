@@ -30,7 +30,7 @@ export async function POST(request: Request) {
     const passwordHash = await bcrypt.hash(password, 10);
 
     // Create User
-    const user = createUserWithPassword(email, passwordHash, name);
+    const user = createUserWithPassword(email, passwordHash, name) as any;
 
     // Generate JWT
     const token = jwt.sign(

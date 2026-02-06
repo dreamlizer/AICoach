@@ -1,6 +1,6 @@
 import { stage4Reply } from "@/lib/pipeline";
-import { buildGrowCardHtml, GrowCardPayload, SAMPLE_CASE, FALLBACK_PAYLOAD } from "@/lib/templates";
-import { cleanJsonBlock } from "@/lib/utils";
+import { buildGrowCardHtml, GrowCardPayload, SAMPLE_CASE, FALLBACK_PAYLOAD } from "@/lib/templates/index";
+import { parseJsonResult } from "@/lib/utils";
 import { PipelineConfig } from "@/lib/stage_settings";
 
 export const checkGrowTrigger = (toolId: string | null, message: string) => {
@@ -22,11 +22,11 @@ export const generateGrowCard = async (
   effectiveToolPrompt: string,
   config: PipelineConfig,
   strategy?: string
-): Promise<string | null> => {
+): Promise<{ html: string | null, usage?: any }> => {
   const { isSample, isCard } = checkGrowTrigger(toolId, message);
 
   if (!((isSample || isCard) && effectiveToolPrompt)) {
-    return null;
+    return { html: null };
   }
 
   const dataPrompt = `
@@ -47,9 +47,12 @@ JSON 格式：
 `.trim();
 
   // Updated stage4Reply call with config
-  const jsonText = await stage4Reply(strategy || "生成卡片数据", config, dataPrompt);
+  const replyResult = await stage4Reply(strategy || "生成卡片数据", config, dataPrompt);
+  const jsonText = replyResult.reply;
+  
   let payload: GrowCardPayload | null = null;
   try {
+    const { cleanJsonBlock } = await import("@/lib/utils");
     payload = JSON.parse(cleanJsonBlock(jsonText));
   } catch (error) {
     console.error("JSON Parse Error:", error);
@@ -58,5 +61,5 @@ JSON 格式：
 
   const finalPayload = payload || FALLBACK_PAYLOAD;
   const html = buildGrowCardHtml(finalPayload);
-  return `\`\`\`html\n${html}\n\`\`\``;
+  return { html: `\`\`\`html\n${html}\n\`\`\``, usage: replyResult.usage };
 };

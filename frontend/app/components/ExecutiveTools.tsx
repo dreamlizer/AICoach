@@ -1,17 +1,13 @@
 import React from "react";
-import { ChevronRight, Target, Stethoscope } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { ExecutiveTool } from "@/lib/executive_tools";
 import { useLanguage } from "@/context/language-context";
+import { toolIconMap } from "@/app/components/Icons";
 
 type ExecutiveToolsProps = {
   tools: ExecutiveTool[];
   onOpenLibrary: () => void;
   onToolClick: (tool: ExecutiveTool) => void;
-};
-
-const iconMap = {
-  target: Target,
-  stethoscope: Stethoscope
 };
 
 export function ExecutiveTools({ tools, onOpenLibrary, onToolClick }: ExecutiveToolsProps) {
@@ -29,14 +25,14 @@ export function ExecutiveTools({ tools, onOpenLibrary, onToolClick }: ExecutiveT
       
       <div className="space-y-0.5">
         {tools.slice(0, 3).map((tool) => {
-          const Icon = iconMap[tool.icon];
+          const Icon = toolIconMap[tool.icon];
           return (
             <button 
               key={tool.id}
               className="flex items-center w-full px-2 py-1.5 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-lg transition-colors gap-3 group"
               onClick={() => onToolClick(tool)}
             >
-              <Icon className="w-4 h-4 text-[#060E9F] dark:text-blue-400" />
+              {Icon && <Icon className="w-4 h-4 text-[#060E9F] dark:text-blue-400" />}
               <span>{tool.name}</span>
             </button>
           );

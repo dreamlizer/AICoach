@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
-import { stage1_analyze, getRecentHistory, stage3Think, stage4Reply, stage5Profile, generateTitle } from "@/lib/pipeline";
-import { saveMessageToDb, updateConversationTitle, updateConversationTool, getMessagesFromDb, countUserMessages } from "@/lib/db";
+import { stage1_analyze, getRecentHistory, stage3Think, stage4Reply, generateTitle } from "@/lib/pipeline";
+import { saveMessageToDb, updateConversationTitle, updateConversationTool, getMessagesFromDb, countUserMessages, getConversationsFromDb, incrementUserTokens, incrementToolUsage, trackEvent } from "@/lib/db";
 import { executiveTools } from "@/lib/executive_tools";
 import { Stage1Analysis } from "@/lib/types";
-import { buildGrowCardHtml, GrowCardPayload, SAMPLE_CASE, FALLBACK_PAYLOAD } from "@/lib/templates";
+import { buildGrowCardHtml, GrowCardPayload, SAMPLE_CASE, FALLBACK_PAYLOAD } from "@/lib/templates/index";
 import { cleanJsonBlock } from "@/lib/utils";
 import { getToolKnowledgeBase } from "@/lib/knowledge_base";
-import { getModelConfig, ModelProvider } from "@/lib/stage_settings";
+import { getModelConfig, ModelProvider, STAGE4_PROMPT, STAGE4_PROMPT_EMPATHETIC } from "@/lib/stage_settings";
 import { getCurrentUser } from "@/lib/session";
 import fs from "fs";
 import path from "path";
+
+// Helper to encode streaming data
+function encodeChunk(data: any) {
+  return new TextEncoder().encode(JSON.stringify(data) + "\n");
+}
 
 export async function POST(request: Request) {
   try {
@@ -30,16 +35,16 @@ export async function POST(request: Request) {
     try {
       const logPath = path.join(process.cwd(), "debug_chat_limit.txt");
       const userMsgCount = countUserMessages(conversationId);
-      const logEntry = `[${new Date().toISOString()}] ConvID: ${conversationId}, UserID: ${userId}, MsgCount: ${userMsgCount}, Limit: 6\n`;
+      const logEntry = `[${new Date().toISOString()}] ConvID: ${conversationId}, UserID: ${userId}, MsgCount: ${userMsgCount}, Limit: 2\n`;
       fs.appendFileSync(logPath, logEntry);
     } catch (e) {
       console.error("Logging failed:", e);
     }
 
-    // Check Anonymous Limit (6 exchanges)
+    // Check Anonymous Limit (4 exchanges: 2 user messages)
     if (!userId) {
       const userMsgCount = countUserMessages(conversationId);
-      if (userMsgCount >= 6) {
+      if (userMsgCount >= 2) {
         return NextResponse.json(
           { error: "Anonymous limit reached", code: "LIMIT_REACHED" },
           { status: 403 }
@@ -48,7 +53,7 @@ export async function POST(request: Request) {
     }
 
     // Get Dynamic Configuration based on user selection
-    const config = getModelConfig((modelProvider as ModelProvider) || "deepseek", partnerStyle);
+    const config = getModelConfig((modelProvider as ModelProvider) || "deepseek");
 
     // 1. Save User Message to DB
     try {
@@ -62,149 +67,226 @@ export async function POST(request: Request) {
         toolTitle, // Pass initial title (if any)
         toolId     // Pass initial tool ID (if any)
       );
-      
-      // Legacy update block removed as saveMessageToDb now handles initialization
     } catch (dbError) {
       console.error("DB Save Error (User):", dbError);
-      // Critical Error: If we can't save the message, we shouldn't proceed.
-      // Otherwise, context is lost and limits are bypassed.
       return NextResponse.json(
         { error: "Failed to save message history", code: "DB_ERROR" },
         { status: 500 }
       );
     }
 
-    // 2. Stage 2: Retrieve Memory
-    const memory = getRecentHistory(conversationId);
+    // Create a Streaming Response
+    const stream = new ReadableStream({
+      async start(controller) {
+        try {
+          // Initial Status: Analyzing
+          controller.enqueue(encodeChunk({ type: "status", status: "analyzing" }));
 
-    // 3. Parallel Processing: Stage 1 (Analysis) & Stage 2 (Memory)
-    const tool = toolId ? executiveTools.find((item) => item.id === toolId) : null;
+          // 2. Stage 2: Retrieve Memory
+          const memory = getRecentHistory(conversationId);
 
-    // Inject Knowledge Base if available for specific tools
-    let effectiveToolPrompt = tool?.prompt;
-    if (tool && tool.id === 'team-diagnosis') {
-      const knowledgeBase = getToolKnowledgeBase(tool.id);
-      if (knowledgeBase && effectiveToolPrompt) {
-        effectiveToolPrompt += knowledgeBase;
-      }
-    }
+          // 3. Parallel Processing: Stage 1 (Analysis) & Stage 2 (Memory)
+          const tool = toolId ? executiveTools.find((item) => item.id === toolId) : null;
 
-    // Optimization: If a specific tool is active, we SKIP Stage 1 Analysis.
-    // The tool's specialized prompt (Stage 3/4) is sufficient and more accurate.
-    let analysisPromise;
-    if (effectiveToolPrompt) {
-      // Create a dummy analysis result for tool mode to satisfy type/debug requirements
-      analysisPromise = Promise.resolve({
-        intent: "tool_execution",
-        sentiment: "neutral",
-        complexity: "high",
-        keywords: []
-      } as Stage1Analysis);
-    } else {
-      analysisPromise = stage1_analyze(message, config);
-    }
-
-    const [analysisResult] = await Promise.allSettled([
-      analysisPromise
-    ]);
-
-    // Handle Stage 1 Result
-    const analysis: Stage1Analysis = analysisResult.status === "fulfilled" 
-      ? analysisResult.value 
-      : { 
-          intent: "CHAT", 
-          sentiment: "Unknown", 
-          complexity: "LOW", 
-          keywords: ["Error"] 
-        };
-
-    if (analysisResult.status === "rejected") {
-      console.error("Stage 1 Failed:", analysisResult.reason);
-    }
-    
-    // Stage 5 Profile Removed (Optimization)
-    const userProfile = null;
-
-    // 4. Stage 3: Deep Thinking (Strategy)
-    const strategy = await stage3Think(message, analysis, memory, config, effectiveToolPrompt);
-
-    // 5. Stage 4: Expression (Final Reply)
-    let aiReply = "";
-
-    // Refactored: Use helper for GROW card generation
-    const { generateGrowCard, checkGrowTrigger } = await import("@/lib/grow_utils");
-    
-    // Check if we should generate a card (using shared logic)
-    const { isSample, isCard } = checkGrowTrigger(toolId, message);
-    const isGrowCardRequest = isSample || isCard;
-
-    if (isGrowCardRequest) {
-        const growCardHtml = await generateGrowCard(toolId, message, effectiveToolPrompt || "", config, strategy);
-        if (growCardHtml) {
-            aiReply = growCardHtml;
-        } else {
-            // Fallback if card generation fails
-            aiReply = strategy 
-              ? await stage4Reply(strategy, config, undefined, effectiveToolPrompt)
-              : "抱歉，无法生成卡片。";
-        }
-    } else {
-        // Standard Text Reply
-        aiReply = strategy 
-          ? await stage4Reply(strategy, config, undefined, effectiveToolPrompt)
-          : "抱歉，我今天状态不佳，无法进行思考。";
-    }
-
-    // 6. Construct Response
-    const debugInfo = {
-        config_provider: config.provider,
-        model_info: {
-             stage1: config.stage1.modelName,
-             stage3: `${config.stage3.modelName} (${config.stage3.reasoningEffort || "Ordinary"})`,
-             stage4: config.stage4.modelName
-        },
-        stage1: analysis,
-        stage2_memory: memory || "无历史记忆",
-        stage3_strategy: strategy || "策略生成失败",
-        stage5_profile: userProfile || "画像更新失败或无变化"
-    };
-
-    try {
-      // Save Analysis Process (Analysis) - Saved FIRST to appear before text in history
-      saveMessageToDb(
-        conversationId, 
-        "ai", 
-        "Full-Link Debug", 
-        "analysis", 
-        JSON.stringify(debugInfo)
-      );
-
-      // Save AI Reply (Text)
-      saveMessageToDb(conversationId, "ai", aiReply, "text");
-
-      // Async Title Generation Optimization
-      // Only generate if it's the first exchange (message count <= 2)
-      // We can check DB or just assume if we want to update titles periodically.
-      // For efficiency, let's just do it for short conversations or explicitly when it's new.
-      // Since we don't know if it's new easily without querying, let's query quickly.
-      const msgs = getMessagesFromDb(conversationId, 10);
-      if (msgs.length <= 2 && !toolTitle) {
-         // Fire and forget - don't await
-         generateTitle(message, aiReply, config).then(newTitle => {
-            if (newTitle) {
-               console.log(`Updating title for ${conversationId} to: ${newTitle}`);
-               updateConversationTitle(conversationId, newTitle);
+          // Inject Knowledge Base if available for specific tools
+          let effectiveToolPrompt = tool?.prompt;
+          if (tool && tool.id === 'team-diagnosis') {
+            const knowledgeBase = getToolKnowledgeBase(tool.id);
+            if (knowledgeBase && effectiveToolPrompt) {
+              effectiveToolPrompt += knowledgeBase;
             }
-         }).catch(err => console.error("Async Title Gen Error:", err));
+          }
+
+          // Stats Accumulation
+          let totalTokens = 0;
+          let inputTokens = 0;
+          let outputTokens = 0;
+
+          let analysisPromise;
+          if (effectiveToolPrompt) {
+            analysisPromise = Promise.resolve({
+              analysis: {
+                intent: "tool_execution",
+                sentiment: "neutral",
+                complexity: "high",
+                keywords: []
+              } as Stage1Analysis,
+              usage: undefined
+            });
+          } else {
+            analysisPromise = stage1_analyze(message, config);
+          }
+
+          const [analysisResult] = await Promise.allSettled([analysisPromise]);
+
+          const analysisData = analysisResult.status === "fulfilled" 
+            ? analysisResult.value 
+            : null;
+            
+          const analysis: Stage1Analysis = analysisData?.analysis || { 
+                intent: "CHAT", 
+                sentiment: "Unknown", 
+                complexity: "LOW", 
+                keywords: ["Error"] 
+              };
+
+          if (analysisData?.usage) {
+              totalTokens += analysisData.usage.total_tokens;
+              inputTokens += analysisData.usage.prompt_tokens;
+              outputTokens += analysisData.usage.completion_tokens;
+          }
+
+          if (analysisResult.status === "rejected") {
+            console.error("Stage 1 Failed:", analysisResult.reason);
+          }
+          
+          const userProfile = null;
+
+          // Transition to Thinking (Stage 3)
+          controller.enqueue(encodeChunk({ type: "status", status: "thinking" }));
+
+          // 4. Stage 3: Deep Thinking (Strategy)
+          const strategyResult = await stage3Think(message, analysis, memory, config, effectiveToolPrompt);
+          const strategy = strategyResult.strategy;
+          
+          if (strategyResult.usage) {
+              totalTokens += strategyResult.usage.total_tokens;
+              inputTokens += strategyResult.usage.prompt_tokens;
+              outputTokens += strategyResult.usage.completion_tokens;
+          }
+
+          // Transition to Replying (Stage 4)
+          controller.enqueue(encodeChunk({ type: "status", status: "replying" }));
+
+          // 5. Stage 4: Expression (Final Reply)
+          let aiReply = "";
+
+          const { generateGrowCard, checkGrowTrigger } = await import("@/lib/grow_utils");
+          
+          const { isSample, isCard } = checkGrowTrigger(toolId, message);
+          const isGrowCardRequest = isSample || isCard;
+
+          if (isGrowCardRequest) {
+              const growCardResult = await generateGrowCard(toolId, message, effectiveToolPrompt || "", config, strategy || undefined);
+              if (growCardResult.html) {
+                  aiReply = growCardResult.html;
+                  if (growCardResult.usage) {
+                      totalTokens += growCardResult.usage.total_tokens;
+                      inputTokens += growCardResult.usage.prompt_tokens;
+                      outputTokens += growCardResult.usage.completion_tokens;
+                  }
+              } else {
+                  // Determine Prompt based on Partner Style
+                  const replyPromptTemplate = partnerStyle === "empathetic" ? STAGE4_PROMPT_EMPATHETIC : STAGE4_PROMPT;
+                  const finalPrompt = replyPromptTemplate.replace("{stage3_strategy}", strategy || "");
+
+                  const replyResult = strategy 
+                    ? await stage4Reply(strategy, config, finalPrompt, effectiveToolPrompt)
+                    : { reply: "抱歉，无法生成卡片。" };
+                  
+                  aiReply = replyResult.reply;
+                  if (replyResult.usage) {
+                      totalTokens += replyResult.usage.total_tokens;
+                      inputTokens += replyResult.usage.prompt_tokens;
+                      outputTokens += replyResult.usage.completion_tokens;
+                  }
+              }
+          } else {
+              // Determine Prompt based on Partner Style
+              const replyPromptTemplate = partnerStyle === "empathetic" ? STAGE4_PROMPT_EMPATHETIC : STAGE4_PROMPT;
+              const finalPrompt = replyPromptTemplate.replace("{stage3_strategy}", strategy || "");
+
+              const replyResult = strategy 
+                ? await stage4Reply(strategy, config, finalPrompt, effectiveToolPrompt)
+                : { reply: "抱歉，我今天状态不佳，无法进行思考。" };
+                
+              aiReply = replyResult.reply;
+              if (replyResult.usage) {
+                  totalTokens += replyResult.usage.total_tokens;
+                  inputTokens += replyResult.usage.prompt_tokens;
+                  outputTokens += replyResult.usage.completion_tokens;
+              }
+          }
+
+          // Update Stats
+          if (userId) {
+              incrementUserTokens(userId, totalTokens, inputTokens, outputTokens);
+              if (toolId) {
+                  incrementToolUsage(userId, toolId);
+              }
+
+              // Example of using generic event tracking for advanced analytics without schema change
+              trackEvent(userId, "chat_completed", "chat", {
+                  conversation_id: conversationId,
+                  tool_id: toolId || "none",
+                  tokens: { total: totalTokens, input: inputTokens, output: outputTokens },
+                  model: config.provider, // Track which model provider was used
+                  has_card: !!isGrowCardRequest
+              });
+          }
+
+          // 6. Construct Response
+          const debugInfo = {
+              config_provider: config.provider,
+              model_info: {
+                   stage1: config.stage1.modelName,
+                   stage3: `${config.stage3.modelName} (${config.stage3.reasoningEffort || "Ordinary"})`,
+                   stage4: `${config.stage4.modelName} [Prompt: ${partnerStyle === "empathetic" ? "Plan B (感性伙伴)" : "Plan A (理性参谋)"}]`
+              },
+              stage1: analysis,
+              stage2_memory: memory || "无历史记忆",
+              stage3_strategy: strategy || "策略生成失败",
+              stage5_profile: userProfile || "画像更新失败或无变化"
+          };
+
+          // Save to DB (Async)
+          try {
+            saveMessageToDb(
+              conversationId, 
+              "ai", 
+              "Full-Link Debug", 
+              "analysis", 
+              JSON.stringify(debugInfo)
+            );
+
+            saveMessageToDb(conversationId, "ai", aiReply, "text");
+
+            const msgs = getMessagesFromDb(conversationId, 10);
+            if (msgs.length <= 2 && !toolTitle) {
+               generateTitle(message, aiReply, config).then(newTitle => {
+                  if (newTitle) {
+                     console.log(`Updating title for ${conversationId} to: ${newTitle}`);
+                     updateConversationTitle(conversationId, newTitle);
+                  }
+               }).catch(err => console.error("Async Title Gen Error:", err));
+            }
+          } catch (dbError) {
+            console.error("DB Save Error (AI):", dbError);
+          }
+
+          // Send Final Data
+          // Security: Only send debug_info to Super Admin
+          const isSuperAdmin = user?.email === "14589960@qq.com";
+          
+          controller.enqueue(encodeChunk({ 
+            type: "data", 
+            reply: aiReply,
+            debug_info: isSuperAdmin ? debugInfo : undefined
+          }));
+          
+          controller.close();
+        } catch (error) {
+          console.error("Streaming Error:", error);
+          controller.error(error);
+        }
       }
+    });
 
-    } catch (dbError) {
-      console.error("DB Save Error (AI):", dbError);
-    }
-
-    return NextResponse.json({
-      reply: aiReply,
-      debug_info: debugInfo
+    return new Response(stream, {
+      headers: {
+        "Content-Type": "application/x-ndjson",
+        "Transfer-Encoding": "chunked"
+      }
     });
 
   } catch (error) {

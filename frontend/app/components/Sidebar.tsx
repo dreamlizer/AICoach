@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from "react";
 import type { ElementType } from "react";
 import { HistoryItem } from "@/lib/types";
-import { MoreHorizontal, Pin, Pencil, Trash2, Calendar, Clock, Settings, X, Search } from "lucide-react";
+import { MoreHorizontal, Pin, Pencil, Trash2, Calendar, Clock, Settings, Menu, Search } from "lucide-react";
 import { SettingsModal } from "./SettingsModal";
 import { ExecutiveTools } from "./ExecutiveTools";
 import { executiveTools } from "@/lib/executive_tools";
 import { toolIconMap } from "@/app/components/Icons";
-import { ProjectLogo } from "./ProjectLogo";
 import { useLanguage } from "@/context/language-context";
 import { formatDateTime } from "@/lib/utils";
 
@@ -118,9 +117,9 @@ export function Sidebar({
         className={`
           fixed inset-y-0 left-0 z-[60] flex h-full w-[260px] shrink-0 flex-col 
           border-r border-gray-200 bg-[#F8F9FA] dark:bg-gray-900 dark:border-gray-800 
-          px-3 py-4 transition-transform duration-300 ease-in-out font-sans 
-          md:static md:translate-x-0 md:flex
-          ${isOpen ? "translate-x-0 shadow-2xl md:shadow-none" : "-translate-x-full md:hidden"}
+          px-3 py-4 transition-all duration-300 ease-in-out font-sans 
+          md:static md:translate-x-0 
+          ${isOpen ? "translate-x-0 shadow-2xl md:shadow-none md:ml-0" : "-translate-x-full md:-ml-[260px]"}
         `}
       >
       {/* Sidebar Header: Toggle + Search */}
@@ -130,8 +129,8 @@ export function Sidebar({
           className="flex h-8 w-8 items-center justify-center rounded-full text-gray-500 hover:bg-gray-200 dark:text-gray-400 dark:hover:bg-gray-800 transition-colors"
           aria-label="close sidebar"
         >
-          {/* Use X icon for close action on mobile/desktop sidebar */}
-          <X className="h-5 w-5" />
+          {/* User requested to keep the hamburger menu icon even when sidebar is open */}
+          <Menu className="h-5 w-5" />
         </button>
         <button
           onClick={onSearchClick}

@@ -2,17 +2,19 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
-import { User as UserIcon, LogOut, Settings, Edit2, UserCircle, Camera } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Edit2, UserCircle, Camera, Lock } from "lucide-react";
 import { AuthModal } from "./AuthModal";
+import { ChangePasswordModal } from "./ChangePasswordModal";
 import { SettingsModal } from "./SettingsModal";
 import { useLanguage } from "@/context/language-context";
 
 export function UserMenu() {
-  const { user, logout, updateProfile } = useAuth();
+  const { user, logout, updateProfile, loading } = useAuth();
   const { t } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -60,6 +62,16 @@ export function UserMenu() {
     };
     reader.readAsDataURL(file);
   };
+
+  // Loading state placeholder
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 p-1 pl-2 pr-1 rounded-full bg-white/50 border border-transparent animate-pulse">
+        <div className="h-4 w-16 bg-gray-200 rounded"></div>
+        <div className="h-8 w-8 rounded-full bg-gray-200"></div>
+      </div>
+    );
+  }
 
   // If not logged in, show simple Login button
   if (!user) {
@@ -165,7 +177,16 @@ export function UserMenu() {
               <UserCircle className="w-4 h-4 text-gray-400" />
               {t('changeUsername')}
             </button>
-
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                setIsChangePasswordOpen(true);
+              }}
+              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+            >
+              <Lock className="w-4 h-4 text-gray-400" />
+              修改密码
+            </button>
           </div>
 
           <div className="border-t border-gray-100 mt-1 pt-1">
@@ -184,6 +205,7 @@ export function UserMenu() {
       )}
 
       <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} />
+      <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <input
         type="file"

@@ -23,3 +23,20 @@ body {
     )
     rgb(var(--background-start-rgb));
 }
+
+@keyframes materialize {
+  0% {
+    opacity: 0;
+    filter: blur(8px);
+    transform: translateY(4px);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0);
+    transform: translateY(0);
+  }
+}
+
+.animate-materialize {
+  animation: materialize 1s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+}

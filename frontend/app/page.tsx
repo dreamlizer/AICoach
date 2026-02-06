@@ -17,13 +17,24 @@ import { UserMenu } from "@/app/components/UserMenu";
 import { SearchInterface } from "@/app/components/SearchInterface";
 import { useAuth } from "@/context/auth-context";
 import { AuthModal } from "@/app/components/AuthModal";
+import { recommendedQuestions } from "@/lib/recommended_questions";
+import { Menu, Hammer, Eye, EyeOff } from "lucide-react";
 
 const DEFAULT_SLOGAN: [string, string] = ["真正的清晰来自于减法，", "而不是堆叠"];
 
+import { getGreeting } from "@/lib/greetings";
+
 export default function Page() {
   const { user } = useAuth();
+  
+  // Super Admin Check
+  const isSuperAdmin = user?.email === "14589960@qq.com";
+  
+  const [showDebugInfo, setShowDebugInfo] = useState(true);
+
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [currentConversationId, setCurrentConversationId] = useState("");
+  const [isInitializing, setIsInitializing] = useState(true);
   const [toolsPanelOpen, setToolsPanelOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [showAuthModal, setShowAuthModal] = useState(false);
@@ -33,7 +44,9 @@ export default function Page() {
   
   // State for scroll targeting
   const [targetMessageId, setTargetMessageId] = useState<number | null>(null);
-  
+  const [randomQuestions, setRandomQuestions] = useState<string[]>([]);
+  const [greeting, setGreeting] = useState<{ title: string; content: string } | null>(null);
+
   const endRef = useRef<HTMLDivElement | null>(null);
 
   // Custom Hooks
@@ -50,10 +63,12 @@ export default function Page() {
     setInput,
     attachments,
     handleFilesSelected,
+    removeAttachment,
     sendMessage,
     selectedModel,
     setSelectedModel,
-    loadConversation
+    loadConversation,
+    stopGeneration
   } = useChat(
     currentConversationId, 
     activeToolId, 
@@ -63,11 +78,73 @@ export default function Page() {
   );
 
   useEffect(() => {
-    setCurrentConversationId(crypto.randomUUID());
+    // Check URL params for conversation ID
+    const params = new URLSearchParams(window.location.search);
+    const urlId = params.get('c');
+    
+    if (urlId) {
+      setCurrentConversationId(urlId);
+      loadConversation(urlId).finally(() => setIsInitializing(false));
+    } else {
+      setCurrentConversationId(crypto.randomUUID());
+      setIsInitializing(false);
+    }
+
     if (typeof window !== 'undefined' && window.innerWidth < 768) {
       setSidebarOpen(false);
     }
+    // Randomly select 4 questions
+    const shuffled = [...recommendedQuestions].sort(() => 0.5 - Math.random());
+    setRandomQuestions(shuffled.slice(0, 4));
+    
+    // Set greeting
+    const greetingData = getGreeting();
+    setGreeting(greetingData);
+    
+    // Update slogan with greeting content
+    const content = greetingData.content;
+    const commaIndex = content.indexOf("，");
+    if (commaIndex !== -1) {
+       setSloganLines([content.substring(0, commaIndex + 1), content.substring(commaIndex + 1)]);
+    } else {
+       setSloganLines([content, ""]);
+    }
   }, []);
+
+  // Sync URL with conversation ID
+  useEffect(() => {
+    if (currentConversationId) {
+      const url = new URL(window.location.href);
+      if (url.searchParams.get('c') !== currentConversationId) {
+        url.searchParams.set('c', currentConversationId);
+        window.history.replaceState(null, '', url.toString());
+      }
+    }
+  }, [currentConversationId]);
+
+  // Restore tool context from history
+  useEffect(() => {
+    if (currentConversationId && history.length > 0) {
+      const item = history.find(h => h.id === currentConversationId);
+      if (item && item.tool_id) {
+        setActiveToolId(item.tool_id);
+        const tool = executiveTools.find((t) => t.id === item.tool_id);
+        if (tool) {
+          setSloganLines(tool.slogan);
+        }
+      }
+    }
+  }, [currentConversationId, history]);
+
+  // Update greeting with user name when user loads
+  useEffect(() => {
+    if (greeting && user?.name) {
+      setGreeting(prev => prev ? {
+        ...prev,
+        title: `${user.name}，${prev.title.split('，').pop() || prev.title}`
+      } : null);
+    }
+  }, [user?.name]);
 
   // Merge anonymous conversation on login
   useEffect(() => {
@@ -126,6 +203,23 @@ export default function Page() {
   };
 
   const handleNewChat = () => {
+    // Check anonymous conversation limit (max 3)
+    if (!user) {
+      // Filter out empty conversations from count to avoid counting "just started" ones?
+      // Or just count all local history items that are anonymous.
+      // Since history includes current user's history (from DB) + local storage for anonymous,
+      // and useHistory merges them.
+      // But for anonymous users, `history` comes from local storage mainly (if not fetched from DB with userId=null which returns nothing specific).
+      // Actually `useHistory` implementation details matter here.
+      // Assuming `history` contains the list of conversations visible to the user.
+      const anonymousConversations = history.filter(item => !item.user_id); // or just 'history' length if user is null
+      if (anonymousConversations.length >= 3) {
+        setShowAuthModal(true);
+        // alert("未登录用户最多只能开启3个对话，请登录后继续。"); // Optional: User friendly message
+        return;
+      }
+    }
+
     setCurrentConversationId(crypto.randomUUID());
     setMessages([]);
     setActiveToolId(null);
@@ -186,7 +280,7 @@ export default function Page() {
         onSearchClick={() => setSearchOpen(true)}
       />
 
-      <main className="flex-1 flex flex-col relative bg-white dark:bg-gray-900 overflow-hidden transition-colors duration-200">
+      <main className="flex-1 flex flex-col relative bg-white dark:bg-gray-900 overflow-hidden transition-opacity duration-500 animate-in fade-in zoom-in-95">
         
         {/* Main Content Area */}
         {searchOpen ? (
@@ -203,13 +297,29 @@ export default function Page() {
                 className="flex h-10 w-10 items-center justify-center rounded-full border border-[#060E9F]/10 bg-white text-[#060E9F] shadow-sm hover:bg-gray-50 mr-2"
                 aria-label="open sidebar"
               >
-                <span className="text-lg">☰</span>
+                <Menu className="h-5 w-5" />
               </button>
             )}
-            <ProjectLogo className="w-10 h-10 md:w-12 md:h-12" />
+            {toolsPanelOpen ? (
+              <div className="flex items-center justify-center w-10 h-10 md:w-12 md:h-12 bg-[#060E9F] text-white rounded-lg shadow-sm">
+                 <Hammer className="w-6 h-6 md:w-7 md:h-7" />
+              </div>
+            ) : (
+              // ADJUST LOGO SIZE HERE: w-10 h-10 (Mobile), md:w-12 md:h-12 (Desktop)
+              <ProjectLogo className="w-10 h-10 md:w-16 md:h-16" />
+            )}
           </div>
 
-          <div className="absolute top-4 right-4 z-20">
+          <div className="absolute top-4 right-4 z-20 flex items-center gap-2">
+            {isSuperAdmin && (
+               <button
+                 onClick={() => setShowDebugInfo(!showDebugInfo)}
+                 className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm hover:text-[#060E9F] transition-colors"
+                 title={showDebugInfo ? "Hide Thinking Process" : "Show Thinking Process"}
+               >
+                 {showDebugInfo ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+               </button>
+            )}
             <UserMenu />
           </div>
 
@@ -222,44 +332,98 @@ export default function Page() {
           <div className="flex-1 overflow-y-auto">
             <div className="mx-auto flex min-h-full w-full max-w-4xl flex-col px-4">
               <div className="flex-1 pb-36 pt-4">
-              <div className="mx-auto flex w-full max-w-2xl flex-col gap-4">
+              <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
                 {toolsPanelOpen ? (
                   <div className="w-full rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
                     <div className="text-xs font-bold uppercase tracking-wider text-gray-500">
                       高管思维工具库
                     </div>
-                    <div className="mt-4 grid grid-cols-2 gap-4">
+                    <div className="mt-4 grid grid-cols-2 md:grid-cols-4 gap-3">
                       {executiveTools.map((tool) => {
                         const Icon = toolIconMap[tool.icon];
                         return (
                           <button
                             key={tool.id}
                             onClick={() => startToolSession(tool)}
-                            className="flex flex-col gap-2 rounded-2xl border border-gray-100 bg-[#F8F9FA] p-4 text-left transition-all hover:border-[#060E9F]/30 hover:bg-white hover:shadow-sm"
+                            className="flex flex-col gap-1.5 rounded-xl border border-gray-100 bg-[#F8F9FA] p-3 text-left transition-all hover:border-[#060E9F]/30 hover:bg-white hover:shadow-sm aspect-[4/3]"
                           >
-                            <div className="flex items-center justify-between">
-                              <div className="flex h-8 w-8 items-center justify-center rounded-full bg-white text-[#060E9F] shadow-sm">
-                                <Icon className="h-4 w-4" />
+                            <div className="flex items-center">
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-[#060E9F] shadow-sm shrink-0">
+                                <Icon className="h-3.5 w-3.5" />
                               </div>
-                              <span className="text-[10px] font-semibold text-gray-400">工具</span>
                             </div>
-                            <div className="text-sm font-semibold text-gray-900">{tool.name}</div>
-                            <div className="text-xs text-gray-500 leading-relaxed">{tool.description}</div>
+                            <div className="flex-1 flex flex-col justify-start gap-1">
+                                <div className="text-sm font-bold text-gray-900">{tool.name}</div>
+                                <div className="text-xs text-gray-500 leading-relaxed line-clamp-4">{tool.description}</div>
+                            </div>
                           </button>
                         );
                       })}
                     </div>
                   </div>
+                ) : isInitializing ? (
+                  // Show nothing or loading spinner while initializing
+                  <div className="flex flex-col items-center justify-center min-h-[50vh] animate-in fade-in duration-300">
+                    <div className="w-8 h-8 border-4 border-[#060E9F]/10 border-t-[#060E9F] rounded-full animate-spin"></div>
+                  </div>
                 ) : (
                   <>
                     {messages.length === 0 ? (
-                      <div className="mt-12 text-center text-sm font-serif text-[#060E9F]/30 animate-in fade-in duration-1000">
-                        这里是你的安全思考空间
+                      <div className="flex flex-col items-center justify-start min-h-full pt-[35vh] pb-20 animate-in fade-in duration-700">
+                        {/* Greeting Message Logic handles safe space removal */}
+                        
+                        {/* Centered Chat Input Container */}
+                        <div className="w-full max-w-2xl mb-1 transition-all duration-700 ease-in-out">
+                           {/* Greeting Message */}
+                           {greeting && (
+                             <div className="w-full px-4 mb-1 text-left">
+                               <div className="text-[#060E9F]">
+                                 <div className="text-xl font-medium">{greeting.title}</div>
+                               </div>
+                             </div>
+                           )}
+                           <ChatInput 
+                            input={input}
+                            setInput={setInput}
+                            onSubmit={sendMessage}
+                            onFilesSelected={handleFilesSelected}
+                            attachments={attachments}
+                            onRemoveAttachment={removeAttachment}
+                            canSubmit={Boolean(input.trim() || attachments.length > 0)}
+                            selectedModel={selectedModel}
+                            onModelChange={setSelectedModel}
+                            isLoading={messages.some(m => m.role === "ai" && (m.status === "analyzing" || m.kind === "thinking"))}
+                            onStop={stopGeneration}
+                            className="pt-0 pb-4 md:pb-6"
+                          />
+                        </div>
+
+                        {/* Recommended Questions List */}
+                        <div className="flex flex-col gap-1 w-full max-w-2xl px-4 transition-opacity duration-500">
+                          {randomQuestions.map((question, index) => (
+                            <button
+                              key={index}
+                              onClick={() => {
+                                setInput(question);
+                              }}
+                              className="text-left py-1 px-4 rounded-xl bg-white border border-gray-100 hover:border-[#060E9F]/20 hover:bg-[#F8F9FA] hover:shadow-sm text-gray-600 hover:text-[#060E9F] transition-all duration-200 group flex items-start"
+                            >
+                              <span className="mr-3 mt-1.5 h-1.5 w-1.5 rounded-full bg-gray-300 group-hover:bg-[#060E9F] shrink-0 transition-colors"></span>
+                              <span className="text-sm font-medium leading-relaxed">
+                                {question.length > 20 ? question.slice(0, 20) + "...." : question}
+                              </span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     ) : (
                       messages.map((message) => (
                         <div key={message.id} id={`message-${message.id}`}>
-                          <ChatMessage message={message} />
+                          <ChatMessage 
+                            message={message} 
+                            isSuperAdmin={isSuperAdmin} 
+                            showDebugInfo={showDebugInfo}
+                          />
                         </div>
                       ))
                     )}
@@ -275,7 +439,7 @@ export default function Page() {
       </main>
       </div>
 
-      {!toolsPanelOpen && (
+      {!toolsPanelOpen && messages.length > 0 && (
       <div
         className={`fixed bottom-0 right-0 z-50 border-t border-[#060E9F]/10 bg-white transition-[left] duration-300 left-0 ${
           sidebarOpen ? "md:left-[260px]" : ""
@@ -286,9 +450,13 @@ export default function Page() {
           setInput={setInput}
           onSubmit={sendMessage}
           onFilesSelected={handleFilesSelected}
+          attachments={attachments}
+          onRemoveAttachment={removeAttachment}
           canSubmit={Boolean(input.trim() || attachments.length > 0)}
           selectedModel={selectedModel}
           onModelChange={setSelectedModel}
+          isLoading={messages.some(m => m.role === "ai" && (m.status === "analyzing" || m.kind === "thinking"))}
+          onStop={stopGeneration}
         />
       </div>
       )}

@@ -18,14 +18,20 @@ const dbPath = path.join(process.cwd(), "sqlite.db");
 
 // Use a global variable to store the database instance in development
 // to prevent multiple connections during hot reloading
-const globalForDb = global as unknown as { dbInstance: DatabaseSync | undefined };
+const globalForDb = global as unknown as { 
+  dbInstance: DatabaseSync | undefined;
+  isInitialized: boolean | undefined;
+};
 
 export const getDb = () => {
   if (!globalForDb.dbInstance) {
     globalForDb.dbInstance = new DatabaseSync(dbPath);
-    
-    // Initialize tables only once when connection is established
     initializeSchema(globalForDb.dbInstance);
+    globalForDb.isInitialized = true;
+  } else if (!globalForDb.isInitialized) {
+    // Fallback: ensure schema is initialized if instance exists but flag is missing (e.g. hot reload)
+    initializeSchema(globalForDb.dbInstance);
+    globalForDb.isInitialized = true;
   }
   return globalForDb.dbInstance;
 };
@@ -107,6 +113,43 @@ const initializeSchema = (db: DatabaseSync) => {
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_verification_codes_email ON verification_codes(email)");
+
+  // New Table: User Stats (Token Usage)
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS user_stats (
+       user_id INTEGER PRIMARY KEY,
+       total_tokens INTEGER DEFAULT 0,
+       input_tokens INTEGER DEFAULT 0,
+       output_tokens INTEGER DEFAULT 0,
+       last_updated TEXT
+     )`
+  );
+
+  // New Table: Tool Usage Stats
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS tool_usage (
+       user_id INTEGER,
+       tool_id TEXT,
+       usage_count INTEGER DEFAULT 0,
+       last_used TEXT,
+       PRIMARY KEY (user_id, tool_id)
+     )`
+  );
+
+  // New Table: Analytics Events (Generic)
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS analytics_events (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       user_id INTEGER,
+       event_type TEXT NOT NULL,
+       category TEXT,
+       event_data TEXT,
+       created_at TEXT NOT NULL
+     )`
+  );
+  
+  db.exec("CREATE INDEX IF NOT EXISTS idx_analytics_events_type ON analytics_events(event_type)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_analytics_events_user ON analytics_events(user_id)");
 
   // Check if conversation_id column exists in messages table
   try {
@@ -465,4 +508,97 @@ export const saveUserProfileToDb = (profile: UserProfile) => {
     JSON.stringify(profile.leadership_level), 
     new Date().toISOString()
   );
+};
+
+// Helper to increment user token usage
+export const incrementUserTokens = (userId: number, total: number, input: number, output: number) => {
+  const db = getDb();
+  const now = new Date().toISOString();
+  
+  // Check if stats exist
+  const exists = db.prepare("SELECT 1 FROM user_stats WHERE user_id = ?").get(userId);
+  
+  if (exists) {
+    const stmt = db.prepare(`
+      UPDATE user_stats 
+      SET total_tokens = total_tokens + ?, 
+          input_tokens = input_tokens + ?, 
+          output_tokens = output_tokens + ?, 
+          last_updated = ? 
+      WHERE user_id = ?
+    `);
+    stmt.run(total, input, output, now, userId);
+  } else {
+    const stmt = db.prepare(`
+      INSERT INTO user_stats (user_id, total_tokens, input_tokens, output_tokens, last_updated) 
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    stmt.run(userId, total, input, output, now);
+  }
+};
+
+// Helper to increment tool usage
+export const incrementToolUsage = (userId: number, toolId: string) => {
+  if (!toolId) return;
+  const db = getDb();
+  const now = new Date().toISOString();
+  
+  // Check if exists
+  const exists = db.prepare("SELECT 1 FROM tool_usage WHERE user_id = ? AND tool_id = ?").get(userId, toolId);
+  
+  if (exists) {
+    const stmt = db.prepare("UPDATE tool_usage SET usage_count = usage_count + 1, last_used = ? WHERE user_id = ? AND tool_id = ?");
+    stmt.run(now, userId, toolId);
+  } else {
+    const stmt = db.prepare("INSERT INTO tool_usage (user_id, tool_id, usage_count, last_used) VALUES (?, ?, 1, ?)");
+    stmt.run(userId, toolId, now);
+  }
+};
+
+export const getUserStats = (userId: number) => {
+  const db = getDb();
+  const stats = db.prepare("SELECT * FROM user_stats WHERE user_id = ?").get(userId) as any;
+  const tools = db.prepare("SELECT tool_id, usage_count FROM tool_usage WHERE user_id = ? ORDER BY usage_count DESC").all(userId) as any[];
+  
+  return {
+    tokens: stats || { total_tokens: 0, input_tokens: 0, output_tokens: 0 },
+    tool_usage: tools || []
+  };
+};
+
+// Generic Event Tracking
+export const trackEvent = (
+  userId: number | null, 
+  eventType: string, 
+  category: string = "general", 
+  data: Record<string, any> = {}
+) => {
+  const db = getDb();
+  const now = new Date().toISOString();
+  
+  try {
+    const stmt = db.prepare(
+      "INSERT INTO analytics_events (user_id, event_type, category, event_data, created_at) VALUES (?, ?, ?, ?, ?)"
+    );
+    stmt.run(userId, eventType, category, JSON.stringify(data), now);
+  } catch (error) {
+    console.error("Failed to track event:", error);
+  }
+};
+
+export const getAnalyticsEvents = (limit: number = 50, userId: number | null = null) => {
+  const db = getDb();
+  let sql = "SELECT * FROM analytics_events";
+  const params: any[] = [];
+
+  if (userId) {
+    sql += " WHERE user_id = ?";
+    params.push(userId);
+  }
+
+  sql += " ORDER BY created_at DESC LIMIT ?";
+  params.push(limit);
+
+  const stmt = db.prepare(sql);
+  return stmt.all(...params);
 };

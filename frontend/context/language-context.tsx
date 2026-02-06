@@ -96,7 +96,8 @@ const translations = {
     changeUsername: "更改用户名",
     logout: "退出登录",
     notSetNickname: "未设置昵称",
-    guest: "访客"
+    guest: "访客",
+    appTitle: "高管内参"
   },
   en: {
     settings: "Settings",
@@ -183,7 +184,8 @@ const translations = {
     changeUsername: "Change Username",
     logout: "Logout",
     notSetNickname: "Nickname not set",
-    guest: "Guest"
+    guest: "Guest",
+    appTitle: "Executive Insider"
   }
 };
 

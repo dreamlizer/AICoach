@@ -3,14 +3,26 @@ import {
   STAGE1_PROMPT,
   STAGE3_PROMPT,
   STAGE4_PROMPT,
+  GLOBAL_CONSTITUTION,
   PipelineConfig
 } from "./stage_settings";
 import { getMessagesFromDb } from "./db";
-import { cleanJsonBlock, parseJsonResult } from "./utils";
+import { parseJsonResult } from "./utils";
 
 import { Stage1Analysis, UserProfile } from "./types";
 
 // Helper function to call AI models (Doubao or DeepSeek)
+type AIModelResult = {
+  content: string;
+  usage?: {
+    total_tokens: number;
+    prompt_tokens: number;
+    completion_tokens: number;
+    prompt_cache_hit_tokens?: number;
+    prompt_cache_miss_tokens?: number;
+  };
+};
+
 async function callAIModel(
   modelType: string, 
   apiKey: string, 
@@ -18,7 +30,7 @@ async function callAIModel(
   modelName: string,
   errorMessage: string = "AI Service Error",
   reasoningEffort: "low" | "medium" | "high" | "minimal" | null = null
-): Promise<string> {
+): Promise<AIModelResult> {
   if (!apiKey) throw new Error(`${modelType} API Key is missing`);
 
   let baseURL = "https://api.deepseek.com"; // Default to DeepSeek
@@ -43,7 +55,21 @@ async function callAIModel(
   }
 
   const completion = await openai.chat.completions.create(requestOptions);
-  return completion.choices[0].message.content || "";
+  
+  // Extract usage with potential cache details (DeepSeek specific)
+  const usage: any = completion.usage || {};
+  
+  return {
+    content: completion.choices[0].message.content || "",
+    usage: completion.usage ? {
+        total_tokens: usage.total_tokens,
+        prompt_tokens: usage.prompt_tokens,
+        completion_tokens: usage.completion_tokens,
+        // Capture DeepSeek cache fields if they exist
+        prompt_cache_hit_tokens: usage.prompt_cache_hit_tokens || usage.prompt_tokens_details?.cached_tokens,
+        prompt_cache_miss_tokens: usage.prompt_cache_miss_tokens,
+    } : undefined
+  };
 }
 
 // Stage 2: Memory Retrieval
@@ -76,13 +102,15 @@ export async function stage3Think(
   history: string,
   config: PipelineConfig,
   toolContext?: string
-): Promise<string | null> {
+): Promise<{ strategy: string | null, usage?: any }> {
   // Pure Tool Mode: If toolContext is present, we bypass the generic STAGE3_PROMPT.
   // We want the strategy to be purely based on the Tool's specific methodology (e.g., GROW).
   
   let prompt = "";
   if (toolContext) {
     prompt = `
+${GLOBAL_CONSTITUTION}
+
 [Role & Methodology]
 ${toolContext}
 
@@ -109,10 +137,10 @@ Do NOT output the final reply yet. Only the strategy.
   try {
     const { modelProvider, apiKey, modelName, reasoningEffort } = config.stage3;
     const result = await callAIModel(modelProvider, apiKey, prompt, modelName, "策略生成失败", reasoningEffort);
-    return result || "策略生成失败";
+    return { strategy: result.content || "策略生成失败", usage: result.usage };
   } catch (error) {
     console.error("Stage 3 Thinking Error:", error);
-    return "策略生成出错";
+    return { strategy: "策略生成出错" };
   }
 }
 
@@ -122,7 +150,7 @@ export async function stage4Reply(
   config: PipelineConfig,
   overridePrompt?: string,
   toolContext?: string
-): Promise<string> {
+): Promise<{ reply: string, usage?: any }> {
   // Pure Tool Mode: If toolContext is present, we bypass the generic STAGE4_PROMPT.
   // This avoids tone/length conflicts (e.g., GROW needs short questions, not 200-word paragraphs).
 
@@ -154,41 +182,43 @@ Generate the response to the user.
   try {
     const { modelProvider, apiKey, modelName, reasoningEffort } = config.stage4;
     const result = await callAIModel(modelProvider, apiKey, prompt, modelName, "回复生成失败", reasoningEffort);
-    return result || "回复生成失败";
+    return { reply: result.content || "回复生成失败", usage: result.usage };
   } catch (error) {
     console.error("Stage 4 Reply Error:", error);
-    return "抱歉，我暂时无法生成回复。";
+    return { reply: "抱歉，我暂时无法生成回复。" };
   }
 }
 
 // Stage 1: Intent Analysis
-export async function stage1_analyze(userInput: string, config: PipelineConfig): Promise<Stage1Analysis> {
+export async function stage1_analyze(userInput: string, config: PipelineConfig): Promise<{ analysis: Stage1Analysis, usage?: any }> {
   const prompt = STAGE1_PROMPT.replace("{user_input}", userInput);
 
   try {
     const { modelProvider, apiKey, modelName, reasoningEffort } = config.stage1;
     const result = await callAIModel(modelProvider, apiKey, prompt, modelName, "Intent Analysis Failed", reasoningEffort);
-    return parseJsonResult(result);
+    return { analysis: parseJsonResult(result.content), usage: result.usage };
   } catch (error) {
     console.error("Stage 1 Analysis Error:", error);
     return {
-      intent: "CHAT",
-      sentiment: "Unknown",
-      complexity: "LOW",
-      keywords: ["Error"],
+      analysis: {
+        intent: "CHAT",
+        sentiment: "Unknown",
+        complexity: "LOW",
+        keywords: ["Error"],
+      }
     };
   }
 }
 
 // Stage 5: User Profiling (Profile Engine)
-export async function stage5Profile(
-  history: string,
-  config: PipelineConfig
-): Promise<UserProfile | null> {
-  // Stage 5 is temporarily disabled by user request.
-  // Kept for interface compatibility.
-  return null;
-}
+// export async function stage5Profile(
+//   history: string,
+//   config: PipelineConfig
+// ): Promise<UserProfile | null> {
+//   // Stage 5 is temporarily disabled by user request.
+//   // Kept for interface compatibility.
+//   return null;
+// }
 
 // Helper: Generate Conversation Title
 export async function generateTitle(userMessage: string, aiReply: string, config: PipelineConfig): Promise<string> {
