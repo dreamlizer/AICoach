@@ -1,7 +1,6 @@
 {
-  "/api/history/route": "app/api/history/route.js",
   "/api/auth/me/route": "app/api/auth/me/route.js",
-  "/api/history/[id]/route": "app/api/history/[id]/route.js",
-  "/api/conversations/merge/route": "app/api/conversations/merge/route.js",
-  "/page": "app/page.js"
+  "/api/history/route": "app/api/history/route.js",
+  "/page": "app/page.js",
+  "/api/conversations/merge/route": "app/api/conversations/merge/route.js"
 }

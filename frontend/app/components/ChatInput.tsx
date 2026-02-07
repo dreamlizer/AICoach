@@ -43,7 +43,19 @@ export function ChatInput({
   const resizeTextarea = () => {
     const textarea = textareaRef.current;
     if (!textarea) return;
+
+    // Reset height to allow shrinking
     textarea.style.height = "auto";
+    
+    // If empty, force single line height to prevent initial jump
+    if (!textarea.value) {
+        // text-base line-height is 1.5rem (24px) usually, but we have py-3 (12px*2 = 24px)
+        // leading-relaxed is 1.625
+        // Let's rely on CSS to set the natural height for empty state
+        // or just return after setting auto (which defaults to rows=1)
+        return;
+    }
+
     const style = window.getComputedStyle(textarea);
     const lineHeight = parseFloat(style.lineHeight || "0");
     const paddingTop = parseFloat(style.paddingTop || "0");
@@ -137,7 +149,7 @@ export function ChatInput({
               }
             }
           }}
-          className="w-full resize-none bg-transparent px-4 py-3 text-base leading-relaxed text-black placeholder:text-[#060E9F]/40 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full resize-none bg-transparent px-4 py-3 text-base text-black placeholder:text-[#060E9F]/40 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
         
         <div className="flex items-center justify-between px-3 pb-3 pt-1">
