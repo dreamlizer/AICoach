@@ -42,10 +42,10 @@ export async function POST(request: Request) {
     // Set Cookie
     const cookie = serialize("auth_token", token, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
+      secure: false, // process.env.NODE_ENV === "production", // Modified for compatibility
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: "/",
-      sameSite: "strict",
+      sameSite: "lax", // Modified from strict to lax
     });
 
     const response = NextResponse.json({ success: true, user });

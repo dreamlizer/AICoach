@@ -203,9 +203,9 @@ export function useChat(
                 )
               );
             } else if (data.type === "data") {
-              const responseId = crypto.randomUUID();
-              const analysisId = crypto.randomUUID();
-              const canvasId = crypto.randomUUID();
+              const responseId = generateUUID();
+              const analysisId = generateUUID();
+              const canvasId = generateUUID();
               const extractedHtml = extractHtmlFromText(data.reply || "");
               const cleanedReply = stripHtmlFromText(data.reply || "");
               const replyText =

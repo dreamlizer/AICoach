@@ -222,7 +222,7 @@ export default function Page() {
       }
     }
 
-    setCurrentConversationId(crypto.randomUUID());
+    setCurrentConversationId(generateUUID());
     setMessages([]);
     setActiveToolId(null);
     setPendingToolTitle(null);
@@ -251,7 +251,7 @@ export default function Page() {
   };
 
   const startToolSession = (tool: ExecutiveTool) => {
-    const conversationId = crypto.randomUUID();
+    const conversationId = generateUUID();
     const title = buildToolTitle(tool);
     setCurrentConversationId(conversationId);
     setMessages([]);
