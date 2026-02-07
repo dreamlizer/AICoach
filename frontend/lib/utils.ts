@@ -108,7 +108,8 @@ export function processHistoryMessage(msg: any): Message[] {
         id: (parseInt(baseMsg.id) + 1).toString(), // temporary fake id
         role: "ai",
         content: extracted,
-        kind: "html",
+        kind: "canvas",
+        canvasHtml: extracted,
         status: "done"
       });
     } else {

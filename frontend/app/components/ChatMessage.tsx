@@ -227,10 +227,10 @@ export function ChatMessage({ message, isSuperAdmin = false, showDebugInfo = tru
 
             <div className="flex w-full flex-row items-end gap-2">
               <div
-                className={`flex-1 rounded-2xl px-5 py-3 text-base leading-relaxed prose max-w-none break-words ${
+                className={`flex-1 rounded-2xl px-5 py-3 text-[16px] leading-[1.7] prose max-w-none break-words ${
                   message.role === "user"
-                    ? "bg-[#060E9F] text-white shadow-sm prose-invert prose-p:text-white prose-headings:text-white"
-                    : "bg-transparent text-[#002345] shadow-none animate-materialize prose-headings:text-[#002345] prose-p:text-[#002345] prose-strong:text-[#002345]"
+                    ? "bg-[#F1F3F4] text-[#202124] shadow-sm prose-p:text-[#202124] prose-headings:text-[#202124]"
+                    : "bg-transparent text-[#202124] shadow-none animate-materialize prose-headings:text-[#202124] prose-p:text-[#202124] prose-strong:text-[#202124]"
                 }`}
               >
                 <ReactMarkdown 

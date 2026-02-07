@@ -106,7 +106,7 @@ export function ChatInput({
       onSubmit={onSubmit}
       className={`mx-auto w-full max-w-2xl px-4 ${className ?? "py-4 md:py-6"}`}
     >
-      <div className="relative flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm transition-all duration-300 focus-within:border-[#060E9F] focus-within:shadow-[0_0_15px_rgba(255,191,63,0.3)]">
+      <div className="relative flex flex-col rounded-2xl bg-white shadow-[0_4px_12px_rgba(0,0,0,0.05)] transition-all duration-300 focus-within:shadow-[0_4px_16px_rgba(0,0,0,0.1)]">
         {/* Attachments Preview */}
         {attachments.length > 0 && (
           <div className="flex flex-wrap gap-2 px-4 pt-4">
@@ -149,7 +149,7 @@ export function ChatInput({
               }
             }
           }}
-          className="w-full resize-none bg-transparent px-4 py-3 text-base text-black placeholder:text-[#060E9F]/40 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full resize-none bg-transparent px-4 py-3 text-base font-normal text-gray-900 placeholder:text-gray-400 placeholder:font-extralight focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed"
         />
         
         <div className="flex items-center justify-between px-3 pb-3 pt-1">

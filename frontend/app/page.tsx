@@ -380,7 +380,7 @@ export default function Page() {
                            {greeting && (
                              <div className="w-full px-4 mb-1 text-left">
                                <div className="text-[#060E9F]">
-                                 <div className="text-xl font-medium">{greeting.title}</div>
+                                 <div className="text-lg font-medium font-sans">{greeting.title}</div>
                                </div>
                              </div>
                            )}
@@ -408,10 +408,10 @@ export default function Page() {
                               onClick={() => {
                                 setInput(question);
                               }}
-                              className="text-left py-1 px-4 rounded-xl bg-white border border-gray-100 hover:border-[#060E9F]/20 hover:bg-[#F8F9FA] hover:shadow-sm text-gray-600 hover:text-[#060E9F] transition-all duration-200 group flex items-start"
+                              className="text-left py-1 px-4 rounded-xl bg-white border border-gray-100 hover:border-[#060E9F]/20 hover:bg-[#F8F9FA] hover:shadow-sm text-gray-500 hover:text-[#060E9F] transition-all duration-200 group flex items-start"
                             >
                               <span className="mr-3 mt-1.5 h-1.5 w-1.5 rounded-full bg-gray-300 group-hover:bg-[#060E9F] shrink-0 transition-colors"></span>
-                              <span className="text-sm font-medium leading-relaxed">
+                              <span className="text-[13px] font-normal leading-relaxed">
                                 {question.length > 20 ? question.slice(0, 20) + "...." : question}
                               </span>
                             </button>

@@ -11,7 +11,7 @@ export function WelcomeHeader({ titleLines }: WelcomeHeaderProps) {
         EXECUTIVE INSIDER
       </div>
       <div className="mt-2 flex w-full flex-col items-center">
-        <h1 className="max-w-4xl px-6 text-center text-2xl md:text-3xl font-serif leading-relaxed text-[#060E9F] md:whitespace-nowrap">
+        <h1 className="max-w-4xl px-6 text-center text-2xl md:text-3xl font-sans font-extralight tracking-[0.1em] leading-relaxed text-[#202124]/80 md:whitespace-nowrap">
           <span className="inline-block">{titleLines[0]}</span>
           <span className="inline-block">{titleLines[1]}</span>
         </h1>

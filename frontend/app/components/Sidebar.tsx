@@ -116,7 +116,7 @@ export function Sidebar({
       <aside 
         className={`
           fixed inset-y-0 left-0 z-[60] flex h-full w-[260px] shrink-0 flex-col 
-          border-r border-gray-200 bg-[#F8F9FA] dark:bg-gray-900 dark:border-gray-800 
+          border-r border-[#E8EAED] bg-[#F9FAFB] dark:bg-gray-900 dark:border-gray-800 
           px-3 py-4 transition-all duration-300 ease-in-out font-sans 
           md:static md:translate-x-0 
           ${isOpen ? "translate-x-0 shadow-2xl md:shadow-none md:ml-0" : "-translate-x-full md:-ml-[260px]"}
@@ -146,7 +146,7 @@ export function Sidebar({
           onNewChat();
           if (window.innerWidth < 768) onClose();
         }}
-        className="w-full flex items-center justify-start gap-3 bg-[#060E9F] text-white py-2.5 px-4 rounded-full shadow-sm hover:shadow-md hover:bg-[#060E9F]/90 transition-all mb-2 mx-1"
+        className="w-full flex items-center justify-start gap-3 bg-white text-[#060E9F] border border-[#060E9F]/20 py-2.5 px-4 rounded-full shadow-sm hover:shadow-md hover:bg-[#060E9F]/5 transition-all mb-2 mx-1"
       >
         <Pencil className="w-4 h-4" />
         <span className="text-sm font-semibold">{t('newChat')}</span>
@@ -165,8 +165,8 @@ export function Sidebar({
         }}
       />
 
-      <div className="mt-2 flex-1 space-y-1 overflow-y-auto px-1">
-        <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider sticky top-0 bg-[#F8F9FA] dark:bg-gray-900 z-10">
+      <div className="mt-2 flex-1 space-y-1 overflow-y-auto px-1 no-scrollbar">
+        <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider sticky top-0 bg-[#F9FAFB] dark:bg-gray-900 z-10">
         {t('recentChats')}
       </div>
         {historyLoading ? (
@@ -181,10 +181,10 @@ export function Sidebar({
             return (
               <div
                 key={item.id}
-                className={`group relative flex items-center justify-between w-full rounded-lg px-3 py-2 text-sm transition-all duration-200 cursor-pointer ${
+                className={`group relative flex items-center justify-between w-full rounded-lg px-3 py-2 text-[13px] transition-all duration-200 cursor-pointer ${
                   isActive 
-                    ? 'bg-[#060E9F]/5 text-[#060E9F] font-medium dark:bg-blue-500/10 dark:text-blue-400' 
-                    : 'text-gray-900 font-medium hover:bg-gray-100 dark:text-gray-200 dark:hover:bg-gray-800'
+                    ? 'bg-[#060E9F]/5 text-[#060E9F] font-bold dark:bg-blue-500/10 dark:text-blue-400' 
+                    : 'text-gray-500 font-medium hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800'
                 }`}
                 onClick={() => {
                   if (!isEditing) {
