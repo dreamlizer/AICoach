@@ -201,29 +201,29 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                     <CheckCircle2 className="w-4 h-4 text-[#1A73E8]" />
                   )}
                 </div>
-                <div className="font-medium text-xs text-[#202124] dark:text-white mb-0.5">{t('rationalStyle')}</div>
+                <div className="font-medium text-xs text-[#202124] dark:text-white mb-0.5">{t('rational')}</div>
               </div>
 
               {/* Option 2: Empathic */}
               <div 
-                onClick={() => setPartnerStyle('empathic')}
+                onClick={() => setPartnerStyle('empathetic')}
                 className={`relative p-3 rounded-lg border cursor-pointer transition-all duration-200 group hover:shadow-sm ${
-                  partnerStyle === 'empathic' 
+                  partnerStyle === 'empathetic' 
                     ? 'border-[#1A73E8] bg-[#1A73E8]/5' 
                     : 'border-gray-200 bg-white hover:border-[#1A73E8]/30'
                 }`}
               >
                 <div className="flex items-start justify-between mb-1.5">
-                   <div className={`p-1.5 rounded-md ${
-                     partnerStyle === 'empathic' ? 'bg-[#1A73E8] text-white' : 'bg-gray-100 text-gray-500 group-hover:text-[#1A73E8]'
+                  <div className={`p-1.5 rounded-md ${
+                     partnerStyle === 'empathetic' ? 'bg-[#1A73E8] text-white' : 'bg-gray-100 text-gray-500 group-hover:text-[#1A73E8]'
                   }`}>
                     <HeartHandshake className="w-4 h-4" />
                   </div>
-                  {partnerStyle === 'empathic' && (
+                  {partnerStyle === 'empathetic' && (
                     <CheckCircle2 className="w-4 h-4 text-[#1A73E8]" />
                   )}
                 </div>
-                <div className="font-medium text-xs text-[#202124] dark:text-white mb-0.5">{t('empathicStyle')}</div>
+                <div className="font-medium text-xs text-[#202124] dark:text-white mb-0.5">{t('empathetic')}</div>
               </div>
             </div>
           </section>
