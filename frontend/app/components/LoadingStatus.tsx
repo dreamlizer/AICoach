@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 
 interface LoadingStatusProps {
-  status?: "analyzing" | "thinking" | "replying";
+  status?: "analyzing" | "thinking" | "replying" | "done";
 }
 
 const statusTextMap = {
   analyzing: "分析中",
   thinking: "思考中",
-  replying: "回复中"
+  replying: "回复中",
+  done: "完成"
 };
 
 export function LoadingStatus({ status = "analyzing" }: LoadingStatusProps) {

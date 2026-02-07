@@ -116,7 +116,7 @@ export function Sidebar({
       <aside 
         className={`
           fixed inset-y-0 left-0 z-[60] flex h-full w-[260px] shrink-0 flex-col 
-          border-r border-[#E8EAED] bg-[#F9FAFB] dark:bg-gray-900 dark:border-gray-800 
+          border-r border-[#F1F3F4] bg-[#F8F9FA] dark:bg-gray-900 dark:border-gray-800 
           px-3 py-4 transition-all duration-300 ease-in-out font-sans 
           md:static md:translate-x-0 
           ${isOpen ? "translate-x-0 shadow-2xl md:shadow-none md:ml-0" : "-translate-x-full md:-ml-[260px]"}
@@ -166,7 +166,7 @@ export function Sidebar({
       />
 
       <div className="mt-2 flex-1 space-y-1 overflow-y-auto px-1 no-scrollbar">
-        <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider sticky top-0 bg-[#F9FAFB] dark:bg-gray-900 z-10">
+        <div className="px-2 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider sticky top-0 bg-[#F8F9FA] dark:bg-gray-900 z-10">
         {t('recentChats')}
       </div>
         {historyLoading ? (

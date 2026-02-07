@@ -1,4 +1,20 @@
 {
+  "/_not-found": "app/_not-found.js",
+  "/api/auth/me/route": "app/api/auth/me/route.js",
+  "/api/auth/reset-password/route": "app/api/auth/reset-password/route.js",
+  "/api/auth/login/route": "app/api/auth/login/route.js",
+  "/api/auth/login-password/route": "app/api/auth/login-password/route.js",
+  "/api/auth/register/route": "app/api/auth/register/route.js",
+  "/api/auth/logout/route": "app/api/auth/logout/route.js",
+  "/api/auth/update/route": "app/api/auth/update/route.js",
+  "/api/auth/send-code/route": "app/api/auth/send-code/route.js",
+  "/api/conversation/route": "app/api/conversation/route.js",
   "/page": "app/page.js",
-  "/api/conversations/merge/route": "app/api/conversations/merge/route.js"
+  "/api/conversations/merge/route": "app/api/conversations/merge/route.js",
+  "/api/auth/update-password/route": "app/api/auth/update-password/route.js",
+  "/api/admin/stats/route": "app/api/admin/stats/route.js",
+  "/api/history/[id]/route": "app/api/history/[id]/route.js",
+  "/api/search/route": "app/api/search/route.js",
+  "/api/history/route": "app/api/history/route.js",
+  "/api/chat/route": "app/api/chat/route.js"
 }

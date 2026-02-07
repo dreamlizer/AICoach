@@ -38,7 +38,7 @@ export type Message = {
   role: "user" | "ai";
   content: string;
   kind?: "text" | "card" | "thinking" | "analysis" | "canvas";
-  status?: "analyzing" | "thinking" | "replying"; // New field for thinking state
+  status?: "analyzing" | "thinking" | "replying" | "done"; // New field for thinking state
   debugInfo?: DebugInfo;
   canvasHtml?: string;
   created_at?: string;
