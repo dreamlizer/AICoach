@@ -9,6 +9,23 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      colors: {
+        dark: {
+          bg: '#121212',
+          sidebar: '#0F0F0F',
+          card: '#1E1E1E',
+          border: '#333333',
+          text: {
+            primary: 'rgba(255, 255, 255, 0.87)',
+            secondary: 'rgba(255, 255, 255, 0.60)',
+            muted: 'rgba(255, 255, 255, 0.38)',
+          },
+          accent: {
+            blue: '#060E9F',
+            light: '#9AA0A6',
+          }
+        }
+      },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic":

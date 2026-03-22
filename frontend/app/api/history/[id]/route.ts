@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getMessagesFromDb, deleteConversation, getConversationById } from "@/lib/db";
+import { getMessagesFromDb, deleteConversation, getConversationById, resolveConversationId } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const conversationId = params.id;
+  const conversationId = resolveConversationId(params.id) || params.id;
   
   // Check ownership
   const user = getCurrentUser();
@@ -31,7 +31,7 @@ export async function GET(
   request: Request,
   { params }: { params: { id: string } }
 ) {
-  const conversationId = params.id;
+  const conversationId = resolveConversationId(params.id) || params.id;
   
   // Check ownership
   const user = getCurrentUser();

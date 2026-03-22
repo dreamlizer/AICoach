@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { verifyCode, getUserByEmail, updateUserPassword } from "@/lib/db";
+import { validatePassword } from "@/lib/session";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
@@ -8,6 +9,11 @@ export async function POST(request: Request) {
 
     if (!email || !code || !newPassword) {
       return NextResponse.json({ error: "所有字段都必须填写" }, { status: 400 });
+    }
+
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      return NextResponse.json({ error: passwordError }, { status: 400 });
     }
 
     // Verify Code

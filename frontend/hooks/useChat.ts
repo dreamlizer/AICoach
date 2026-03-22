@@ -1,29 +1,34 @@
 import { useState, useCallback } from "react";
 import { Message } from "@/lib/types";
 import { extractHtmlFromText, stripHtmlFromText, processHistoryMessage, generateUUID } from "@/lib/utils";
-import { ModelProvider } from "@/lib/stage_settings";
+import { ModelMode } from "@/lib/stage_settings";
 import { usePreferences } from "@/context/preferences-context";
+import { SAMPLE_MESSAGES } from "@/lib/sample_data";
+import { apiClient } from "@/lib/api-client";
 
 export function useChat(
   conversationId: string, 
   activeToolId: string | null, 
   pendingToolTitle: string | null,
   onHistoryUpdate: () => void,
-  onLimitReached?: () => void
+  onLimitReached?: (reason?: "anonymous" | "daily_limit") => void
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [attachments, setAttachments] = useState<{ name: string; type: string; text?: string; url?: string }[]>([]);
-  const [selectedModel, setSelectedModel] = useState<ModelProvider>("deepseek");
-  const { partnerStyle } = usePreferences();
+  const [modelMode, setModelMode] = useState<ModelMode>("fast");
+  const { partnerStyle, modelProvider } = usePreferences();
   const [abortController, setAbortController] = useState<AbortController | null>(null);
 
   const loadConversation = useCallback(async (id: string) => {
+    // Check if it's a sample conversation
+    if (SAMPLE_MESSAGES[id]) {
+      setMessages(SAMPLE_MESSAGES[id]);
+      return;
+    }
+
     try {
-      const res = await fetch(`/api/history/${id}`);
-      if (!res.ok) throw new Error("Failed to load conversation");
-      
-      const data = await res.json();
+      const data = await apiClient.history.get(id);
       
       const uiMessages: Message[] = [];
       data.forEach((msg: any) => {
@@ -149,6 +154,7 @@ export function useChat(
 
     try {
       setMessages((prev) => [...prev, userMessage, thinkingMessage]);
+      const currentInput = input; // Preserve input
       setInput("");
       setAttachments([]);
 
@@ -161,7 +167,8 @@ export function useChat(
           conversationId: conversationId,
           toolId: activeToolId,
           toolTitle: pendingToolTitle,
-          modelProvider: selectedModel,
+          modelProvider: modelProvider,
+          mode: modelMode,
           partnerStyle: partnerStyle
         }),
       });
@@ -169,7 +176,18 @@ export function useChat(
       if (res.status === 403) {
         // Limit reached
         setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== thinkingMessage.id));
-        if (onLimitReached) onLimitReached();
+        
+        // Restore input
+        setInput(currentInput);
+
+        try {
+          const data = await res.json();
+          const reason = data.code === "DAILY_LIMIT_REACHED" ? "daily_limit" : "anonymous";
+          if (onLimitReached) onLimitReached(reason);
+        } catch (e) {
+          // Fallback if json parse fails
+          if (onLimitReached) onLimitReached("anonymous");
+        }
         return;
       }
 
@@ -192,13 +210,19 @@ export function useChat(
           if (!line.trim()) continue;
           
           try {
-            const data = JSON.parse(line);
+            const jsonStr = line.replace(/^data: /, "").trim();
+            if (!jsonStr) continue;
+            const data = JSON.parse(jsonStr);
 
             if (data.type === "status") {
               setMessages((prev) => 
                 prev.map((msg) => 
                   msg.id === thinkingMessage.id 
-                    ? { ...msg, status: data.status } 
+                    ? { 
+                        ...msg, 
+                        status: data.status,
+                        thinking_keywords: data.keywords || msg.thinking_keywords 
+                      } 
                     : msg
                 )
               );
@@ -274,8 +298,8 @@ export function useChat(
     handleFilesSelected,
     removeAttachment,
     sendMessage,
-    selectedModel,
-    setSelectedModel,
+    modelMode,
+    setModelMode,
     loadConversation,
     stopGeneration
   };

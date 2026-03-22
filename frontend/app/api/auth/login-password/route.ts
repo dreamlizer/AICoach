@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { getUserByEmail } from "@/lib/db";
-import jwt from "jsonwebtoken";
-import { serialize } from "cookie";
 import bcrypt from "bcryptjs";
-
-const JWT_SECRET = process.env.JWT_SECRET || "default-secret";
+import { checkLoginRateLimit, handleLoginSuccess, handleLoginFailure } from "@/lib/auth-helpers";
 
 export async function POST(request: Request) {
   try {
@@ -14,42 +11,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "邮箱和密码不能为空" }, { status: 400 });
     }
 
-    // Get User
+    const rateLimitError = checkLoginRateLimit(email);
+    if (rateLimitError) return rateLimitError;
+
     const user = getUserByEmail(email) as any;
     if (!user) {
-      return NextResponse.json({ error: "用户不存在" }, { status: 400 });
+      return handleLoginFailure(email, "邮箱或密码错误");
     }
 
-    // Check Password
     if (!user.password_hash) {
-       return NextResponse.json({ error: "该用户未设置密码，请使用验证码登录或重置密码" }, { status: 400 });
+      return handleLoginFailure(email, "邮箱或密码错误");
     }
 
     const isMatch = await bcrypt.compare(password, user.password_hash);
     if (!isMatch) {
-      return NextResponse.json({ error: "密码错误" }, { status: 401 });
+      return handleLoginFailure(email, "邮箱或密码错误");
     }
 
-    // Generate JWT
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    // Set Cookie
-    const cookie = serialize("auth_token", token, {
-      httpOnly: true,
-      secure: false, // process.env.NODE_ENV === "production", // Modified for compatibility
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-      sameSite: "lax", // Modified from strict to lax
-    });
-
-    const response = NextResponse.json({ success: true, user });
-    response.headers.set("Set-Cookie", cookie);
-
-    return response;
+    return handleLoginSuccess(user);
   } catch (error) {
     console.error("Login Password Error:", error);
     return NextResponse.json({ error: "登录失败" }, { status: 500 });

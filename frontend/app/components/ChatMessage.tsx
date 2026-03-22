@@ -49,9 +49,29 @@ export function ChatMessage({ message, isSuperAdmin = false, showDebugInfo = tru
   const copyToClipboard = async () => {
     if (!message.content) return;
     try {
-      await navigator.clipboard.writeText(message.content);
-      setIsCopied(true);
-      setTimeout(() => setIsCopied(false), 2000);
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(message.content);
+        setIsCopied(true);
+        setTimeout(() => setIsCopied(false), 2000);
+      } else {
+        // Fallback for non-secure contexts (HTTP)
+        const textArea = document.createElement("textarea");
+        textArea.value = message.content;
+        textArea.style.position = "fixed";
+        textArea.style.left = "-9999px";
+        textArea.style.top = "0";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          setIsCopied(true);
+          setTimeout(() => setIsCopied(false), 2000);
+        } catch (err) {
+          console.error('Fallback: Oops, unable to copy', err);
+        }
+        document.body.removeChild(textArea);
+      }
     } catch (err) {
       console.error("Failed to copy:", err);
     }
@@ -80,12 +100,21 @@ export function ChatMessage({ message, isSuperAdmin = false, showDebugInfo = tru
       const doc = iframe.contentDocument;
       if (!doc) return;
       observerRef.current?.disconnect();
-      observerRef.current = new ResizeObserver(() => updateIframeHeight());
+      
+      // Wrap in requestAnimationFrame to avoid "ResizeObserver loop limit exceeded"
+      observerRef.current = new ResizeObserver(() => {
+        window.requestAnimationFrame(() => {
+          updateIframeHeight();
+        });
+      });
+      
       observerRef.current.observe(doc.documentElement);
       if (doc.body) {
         observerRef.current.observe(doc.body);
       }
-    } catch {}
+    } catch (e) {
+      console.error("ResizeObserver error:", e);
+    }
   };
 
   useEffect(() => {
@@ -123,17 +152,17 @@ export function ChatMessage({ message, isSuperAdmin = false, showDebugInfo = tru
           </div>
         ) : null
       ) : message.kind === "canvas" && message.canvasHtml ? (
-        <div className="w-full max-w-5xl overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-          <div className="flex items-center justify-between border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-400">
+        <div className="w-full max-w-5xl overflow-hidden rounded-2xl border border-gray-100 dark:border-dark-border bg-white dark:bg-dark-card shadow-sm">
+          <div className="flex items-center justify-between border-b border-gray-100 dark:border-dark-border px-4 py-2 text-xs font-semibold text-gray-400 dark:text-dark-text-muted">
             <span>画布预览</span>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 onClick={() => setCanvasView("preview")}
-                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
+                className={`rounded-full px-3 py-1 text-[0.6875rem] font-semibold transition-colors ${
                   canvasView === "preview"
-                    ? "bg-[#060E9F]/10 text-[#060E9F]"
-                    : "text-gray-400 hover:text-[#060E9F]"
+                    ? "bg-[#060E9F]/10 dark:bg-blue-400/10 text-[#060E9F] dark:text-blue-400"
+                    : "text-gray-400 dark:text-dark-text-muted hover:text-[#060E9F] dark:hover:text-blue-400"
                 }`}
               >
                 预览
@@ -141,10 +170,10 @@ export function ChatMessage({ message, isSuperAdmin = false, showDebugInfo = tru
               <button
                 type="button"
                 onClick={() => setCanvasView("code")}
-                className={`rounded-full px-3 py-1 text-[11px] font-semibold transition-colors ${
+                className={`rounded-full px-3 py-1 text-[0.6875rem] font-semibold transition-colors ${
                   canvasView === "code"
-                    ? "bg-[#060E9F]/10 text-[#060E9F]"
-                    : "text-gray-400 hover:text-[#060E9F]"
+                    ? "bg-[#060E9F]/10 dark:bg-blue-400/10 text-[#060E9F] dark:text-blue-400"
+                    : "text-gray-400 dark:text-dark-text-muted hover:text-[#060E9F] dark:hover:text-blue-400"
                 }`}
               >
                 代码
@@ -162,15 +191,15 @@ export function ChatMessage({ message, isSuperAdmin = false, showDebugInfo = tru
               className="w-full"
             />
           ) : (
-            <pre className="max-h-[360px] overflow-auto bg-[#FBFBFB] px-4 py-3 text-xs text-[#002345]">
+            <pre className="max-h-[360px] overflow-auto bg-[#FBFBFB] dark:bg-dark-sidebar px-4 py-3 text-xs text-[#002345] dark:text-dark-text-primary">
               {message.canvasHtml}
             </pre>
           )}
         </div>
       ) : message.kind === "thinking" ? (
-        <LoadingStatus status={message.status} />
+        <LoadingStatus status={message.status} keywords={message.thinking_keywords} />
       ) : (
-        <div className={`flex items-end gap-2 max-w-[60%] ${message.role === "user" ? "flex-row" : "flex-col"}`}>
+        <div className={`flex items-end gap-2 max-w-[95%] md:max-w-[60%] ${message.role === "user" ? "flex-row" : "flex-col"}`}>
           {message.role === "user" && (
             <button
               onClick={copyToClipboard}
@@ -190,7 +219,7 @@ export function ChatMessage({ message, isSuperAdmin = false, showDebugInfo = tru
                   return (
                     <div 
                       key={i} 
-                      className={`relative flex items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-white ${
+                      className={`relative flex items-center justify-center overflow-hidden rounded-lg border border-gray-200 dark:border-dark-border bg-white dark:bg-dark-card ${
                         isImage ? "h-20 w-20" : "h-10 px-3"
                       }`}
                       title={file.name}
@@ -203,18 +232,18 @@ export function ChatMessage({ message, isSuperAdmin = false, showDebugInfo = tru
                           onClick={() => window.open(file.url, '_blank')}
                         />
                       ) : isImage ? (
-                        <div className="flex h-full w-full flex-col items-center justify-center bg-gray-50 text-xs text-gray-400">
+                        <div className="flex h-full w-full flex-col items-center justify-center bg-gray-50 dark:bg-[#2C2C2C] text-xs text-gray-400 dark:text-gray-500">
                           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className="mb-1 opacity-50">
                             <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
                             <circle cx="8.5" cy="8.5" r="1.5"></circle>
                             <polyline points="21 15 16 10 5 21"></polyline>
                           </svg>
-                          <span className="max-w-[50px] truncate text-[9px]">IMG</span>
+                          <span className="max-w-[50px] truncate text-[0.5625rem]">IMG</span>
                         </div>
                       ) : (
-                        <div className="flex items-center gap-2 text-xs text-gray-600">
-                           <div className="flex h-6 w-8 items-center justify-center rounded bg-blue-50 text-blue-600">
-                             <span className="text-[9px] font-bold uppercase">{file.name.split('.').pop()?.slice(0,4) || "DOC"}</span>
+                        <div className="flex items-center gap-2 text-xs text-gray-600 dark:text-gray-400">
+                           <div className="flex h-6 w-8 items-center justify-center rounded bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400">
+                             <span className="text-[0.5625rem] font-bold uppercase">{file.name.split('.').pop()?.slice(0,4) || "DOC"}</span>
                            </div>
                            <span className="max-w-[120px] truncate">{file.name}</span>
                         </div>
@@ -227,25 +256,29 @@ export function ChatMessage({ message, isSuperAdmin = false, showDebugInfo = tru
 
             <div className="flex w-full flex-row items-end gap-2">
               <div
-                className={`flex-1 rounded-2xl px-5 py-3 text-[16px] leading-[1.7] prose max-w-none break-words ${
+                className={`flex-1 rounded-2xl px-5 py-3 text-[1rem] leading-[1.7] prose max-w-none break-words ${
                   message.role === "user"
-                    ? "bg-[#F1F3F4] text-[#202124] shadow-sm prose-p:text-[#202124] prose-headings:text-[#202124]"
-                    : "bg-transparent text-[#202124] shadow-none animate-materialize prose-headings:text-[#202124] prose-p:text-[#202124] prose-strong:text-[#202124]"
+                    ? "bg-[#F1F3F4] dark:bg-[#2C2C2C] text-[#202124] dark:text-white shadow-sm"
+                    : "bg-transparent text-[#202124] dark:text-white shadow-none animate-materialize prose-headings:text-[#202124] dark:prose-headings:text-white prose-p:text-[#202124] dark:prose-p:text-white prose-strong:text-[#202124] dark:prose-strong:text-white prose-li:text-[#202124] dark:prose-li:text-white prose-ul:text-[#202124] dark:prose-ul:text-white prose-ol:text-[#202124] dark:prose-ol:text-white dark:prose-invert"
                 }`}
               >
-                <ReactMarkdown 
-                  remarkPlugins={[remarkGfm]}
-                  components={{
-                    a: ({ node, ...props }) => (
-                      <a {...props} target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-500" />
-                    ),
-                    p: ({ node, ...props }) => (
-                      <p {...props} className="mb-2 last:mb-0" />
-                    ),
-                  }}
-                >
-                  {mainContent}
-                </ReactMarkdown>
+                {message.role === "user" ? (
+                  <div className="whitespace-pre-wrap font-sans">{mainContent}</div>
+                ) : (
+                  <ReactMarkdown 
+                    // remarkPlugins={[remarkGfm]}
+                    components={{
+                      a: ({ node, ...props }) => (
+                        <a {...props} target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-500" />
+                      ),
+                      p: ({ node, ...props }) => (
+                        <p {...props} className="mb-2 last:mb-0" />
+                      ),
+                    }}
+                  >
+                    {mainContent}
+                  </ReactMarkdown>
+                )}
                 {message.role === "ai" && (
                   <div className="mt-4 h-[2px] w-20 bg-[#FFBF3F]"></div>
                 )}
@@ -253,7 +286,7 @@ export function ChatMessage({ message, isSuperAdmin = false, showDebugInfo = tru
               {message.role === "ai" && (
                 <button
                   onClick={copyToClipboard}
-                  className="mb-3 flex items-center justify-center text-gray-400 hover:text-[#060E9F] transition-colors"
+                  className="mb-3 flex items-center justify-center text-gray-400 dark:text-gray-500 hover:text-[#060E9F] dark:hover:text-blue-400 transition-colors"
                   title="复制回答"
                 >
                   {isCopied ? <Check size={14} /> : <Copy size={14} />}

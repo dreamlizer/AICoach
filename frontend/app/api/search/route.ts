@@ -1,11 +1,8 @@
 import { NextResponse } from "next/server";
-import { searchMessages, getUserByEmail } from "@/lib/db";
-import { cookies } from "next/headers";
-import jwt from "jsonwebtoken";
+import { searchMessages } from "@/lib/db";
+import { getCurrentUser } from "@/lib/session";
 
 export const dynamic = 'force-dynamic';
-
-const JWT_SECRET = process.env.JWT_SECRET || "default-secret-key";
 
 export async function GET(request: Request) {
   try {
@@ -17,21 +14,10 @@ export async function GET(request: Request) {
     }
 
     // Authenticate user
-    const cookieStore = await cookies();
-    const token = cookieStore.get("auth_token");
     let userId: number | null = null;
 
-    if (token) {
-      try {
-        const decoded = jwt.verify(token.value, JWT_SECRET) as { email: string };
-        const user = getUserByEmail(decoded.email);
-        if (user) {
-          userId = user.id;
-        }
-      } catch (err) {
-        // Invalid token, treat as anonymous
-      }
-    }
+    const currentUser = getCurrentUser();
+    if (currentUser) userId = Number(currentUser.id);
 
     const rawResults = searchMessages(query, userId);
 

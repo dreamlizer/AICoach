@@ -9,7 +9,8 @@ export function ProjectLogo({ className }: { className?: string }) {
         src="/logo2.png" 
         alt="Logo" 
         fill
-        className="object-contain"
+        sizes="(max-width: 768px) 48px, 96px"
+        className="object-contain dark:filter dark:grayscale dark:invert dark:mix-blend-screen"
         priority
       />
     </div>

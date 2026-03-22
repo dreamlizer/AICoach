@@ -6,12 +6,13 @@
   --foreground-rgb: 0, 0, 0;
   --background-start-rgb: 214, 219, 220;
   --background-end-rgb: 255, 255, 255;
+  --app-font-size: 112.5%;
 }
 
 .dark {
   --foreground-rgb: 255, 255, 255;
-  --background-start-rgb: 0, 0, 0;
-  --background-end-rgb: 0, 0, 0;
+  --background-start-rgb: 18, 18, 18; /* #121212 */
+  --background-end-rgb: 18, 18, 18; /* #121212 */
 }
 
 body {
@@ -23,6 +24,28 @@ body {
       rgb(var(--background-end-rgb))
     )
     rgb(var(--background-start-rgb));
+}
+
+html {
+  font-size: var(--app-font-size);
+}
+
+.report-card-shell {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: calc(var(--app-font-size) * 0.8);
+  }
+  .report-card-scroll {
+    overflow-x: auto;
+  }
+  .report-card-shell {
+    margin-left: 0;
+    margin-right: 0;
+  }
 }
 
 @keyframes materialize {

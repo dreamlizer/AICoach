@@ -3,6 +3,7 @@ import {
   STAGE1_PROMPT,
   STAGE3_PROMPT,
   STAGE4_PROMPT,
+  REALTIME_STATUS_PROMPT,
   GLOBAL_CONSTITUTION,
   PipelineConfig
 } from "./stage_settings";
@@ -29,31 +30,25 @@ async function callAIModel(
   prompt: string, 
   modelName: string,
   errorMessage: string = "AI Service Error",
-  reasoningEffort: "low" | "medium" | "high" | "minimal" | null = null
+  reasoningEffort: "low" | "medium" | "high" | "minimal" | null = null,
+  onChunk?: (chunk: string) => void
 ): Promise<AIModelResult> {
   // [DIAGNOSTIC] Check Environment
   const fs = require('fs');
   const path = require('path');
-  console.log(`[API CHECK] Provider: ${modelType}`);
-  console.log(`[API CHECK] CWD: ${process.cwd()}`);
   
   const envPath = path.resolve(process.cwd(), '.env.local');
   const envExists = fs.existsSync(envPath);
-  console.log(`[API CHECK] .env.local exists: ${envExists} at ${envPath}`);
   
   if (envExists) {
      try {
         const envContent = fs.readFileSync(envPath, 'utf-8');
         // Check for DeepSeek key specifically in file content (safe check)
         const hasDSKey = envContent.includes('DEEPSEEK_API_KEY=');
-        console.log(`[API CHECK] .env.local content check: Has DEEPSEEK_API_KEY? ${hasDSKey}`);
      } catch (e) {
         console.error("[API CHECK] Failed to read .env.local:", e);
      }
   }
-
-  console.log(`[API CHECK] process.env.DEEPSEEK_API_KEY (runtime): ${process.env.DEEPSEEK_API_KEY ? 'Present' : 'Missing'}`);
-  console.log(`[API CHECK] Passed apiKey arg: ${apiKey ? "Present (Starts with " + apiKey.substring(0, 8) + "...)" : "MISSING/EMPTY"}`);
 
   if (!apiKey) throw new Error(`${modelType} API Key is missing`);
 
@@ -71,29 +66,82 @@ async function callAIModel(
   const requestOptions: any = {
     messages: [{ role: "system", content: prompt }], // Doubao/DeepSeek support system role
     model: modelName,
+    stream: !!onChunk // Enable streaming if callback is provided
   };
 
-  // Add reasoning_effort if specified (For Doubao or O1 models)
+  // Add reasoning_effort if specified
   if (reasoningEffort) {
-    requestOptions.reasoning_effort = reasoningEffort;
+     // Unified handling: Both DeepSeek and Doubao (Seed 1.8+) support standard reasoning_effort
+     requestOptions.reasoning_effort = reasoningEffort;
   }
 
-  const completion = await openai.chat.completions.create(requestOptions);
-  
-  // Extract usage with potential cache details (DeepSeek specific)
-  const usage: any = completion.usage || {};
-  
-  return {
-    content: completion.choices[0].message.content || "",
-    usage: completion.usage ? {
-        total_tokens: usage.total_tokens,
-        prompt_tokens: usage.prompt_tokens,
-        completion_tokens: usage.completion_tokens,
-        // Capture DeepSeek cache fields if they exist
-        prompt_cache_hit_tokens: usage.prompt_cache_hit_tokens || usage.prompt_tokens_details?.cached_tokens,
-        prompt_cache_miss_tokens: usage.prompt_cache_miss_tokens,
-    } : undefined
-  };
+  // [Debug Log]
+  console.log(`[CallAI] ${modelType} request:`, JSON.stringify({ 
+      model: modelName, 
+      thinking: requestOptions.thinking,
+      reasoning_effort: requestOptions.reasoning_effort,
+      stream: requestOptions.stream
+  }));
+
+  try {
+      if (requestOptions.stream) {
+          const stream = await openai.chat.completions.create(requestOptions) as any;
+          let fullContent = "";
+          let usage: any = undefined;
+
+          for await (const chunk of stream) {
+              const delta = chunk.choices[0]?.delta;
+              const content = delta?.content || "";
+              // Capture DeepSeek R1 reasoning content if available
+              const reasoning = (delta as any)?.reasoning_content || "";
+
+              if (content || reasoning) {
+                  fullContent += content;
+                  // Pass combined content (Thinking + Output) to the status generator callback
+                  if (onChunk) onChunk(reasoning + content);
+              }
+              // Capture usage from stream (often in the last chunk for DeepSeek)
+              if (chunk.usage) {
+                  usage = chunk.usage;
+              }
+          }
+
+          return {
+            content: fullContent,
+            usage: usage ? {
+                total_tokens: usage.total_tokens,
+                prompt_tokens: usage.prompt_tokens,
+                completion_tokens: usage.completion_tokens,
+                prompt_cache_hit_tokens: usage.prompt_cache_hit_tokens || usage.prompt_tokens_details?.cached_tokens,
+                prompt_cache_miss_tokens: usage.prompt_cache_miss_tokens,
+            } : undefined
+          };
+      } else {
+          const completion = await openai.chat.completions.create(requestOptions);
+          
+          // Extract usage with potential cache details (DeepSeek specific)
+          const usage: any = completion.usage || {};
+          
+          return {
+            content: completion.choices[0].message.content || "",
+            usage: completion.usage ? {
+                total_tokens: usage.total_tokens,
+                prompt_tokens: usage.prompt_tokens,
+                completion_tokens: usage.completion_tokens,
+                // Capture DeepSeek cache fields if they exist
+                prompt_cache_hit_tokens: usage.prompt_cache_hit_tokens || usage.prompt_tokens_details?.cached_tokens,
+                prompt_cache_miss_tokens: usage.prompt_cache_miss_tokens,
+            } : undefined
+          };
+      }
+  } catch (error: any) {
+      console.error(`[CallAI] Error calling ${modelType}:`, error);
+      // Return a safe error message instead of crashing
+      return {
+          content: `AI Service Error: ${error.message || "Unknown error"}`,
+          usage: { total_tokens: 0, prompt_tokens: 0, completion_tokens: 0 }
+      };
+  }
 }
 
 // Stage 2: Memory Retrieval
@@ -125,7 +173,8 @@ export async function stage3Think(
   analysis: Stage1Analysis, 
   history: string,
   config: PipelineConfig,
-  toolContext?: string
+  toolContext?: string,
+  onChunk?: (chunk: string) => void
 ): Promise<{ strategy: string | null, usage?: any }> {
   // Pure Tool Mode: If toolContext is present, we bypass the generic STAGE3_PROMPT.
   // We want the strategy to be purely based on the Tool's specific methodology (e.g., GROW).
@@ -160,13 +209,40 @@ Do NOT output the final reply yet. Only the strategy.
 
   try {
     const { modelProvider, apiKey, modelName, reasoningEffort } = config.stage3;
-    const result = await callAIModel(modelProvider, apiKey, prompt, modelName, "策略生成失败", reasoningEffort);
+    const result = await callAIModel(
+        modelProvider, 
+        apiKey, 
+        prompt, 
+        modelName, 
+        "策略生成失败", 
+        reasoningEffort,
+        onChunk // Pass the callback
+    );
     return { strategy: result.content || "策略生成失败", usage: result.usage };
   } catch (error) {
     console.error("Stage 3 Thinking Error:", error);
     return { strategy: "策略生成出错" };
   }
 }
+
+// Helper: Realtime Status Generation
+export async function generateRealtimeStatus(
+  thinkingSnippet: string, 
+  config: PipelineConfig
+): Promise<string> {
+   const prompt = `${REALTIME_STATUS_PROMPT}\n\n[Input Fragment]\n${thinkingSnippet}`;
+   
+   try {
+     // Use Stage 1 (Fast model) for status generation
+     const { modelProvider, apiKey, modelName } = config.stage1;
+     // Disable reasoning for this fast task
+     const result = await callAIModel(modelProvider, apiKey, prompt, modelName, "正在分析...", null);
+     return result.content.replace(/[""]/g, "").trim();
+   } catch (e) {
+     return "正在深度思考...";
+   }
+}
+
 
 // Stage 4: Reply Generation
 export async function stage4Reply(

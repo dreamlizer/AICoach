@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { saveVerificationCode, getUserByEmail, User } from "@/lib/db";
+import { saveVerificationCode, getRecentVerificationCodeCount, getUserByEmail, User } from "@/lib/db";
 import { sendVerificationEmail } from "@/lib/email";
 
 export async function POST(request: Request) {
@@ -24,6 +24,11 @@ export async function POST(request: Request) {
 
     if (type === "reset" && !user) {
        return NextResponse.json({ error: "该账号不存在，无法找回密码" }, { status: 400 });
+    }
+
+    const recentCount = getRecentVerificationCodeCount(email, 60 * 1000);
+    if (recentCount > 0) {
+      return NextResponse.json({ error: "验证码发送过于频繁，请稍后再试" }, { status: 429 });
     }
 
     // Generate 6-digit code

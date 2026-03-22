@@ -2,11 +2,15 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useAuth } from "@/context/auth-context";
-import { User as UserIcon, LogOut, Settings, Edit2, UserCircle, Camera, Lock } from "lucide-react";
+import { User as UserIcon, LogOut, Settings, Edit2, UserCircle, Camera, Lock, History, FileText } from "lucide-react";
 import { AuthModal } from "./AuthModal";
 import { ChangePasswordModal } from "./ChangePasswordModal";
 import { SettingsModal } from "./SettingsModal";
+import { AvatarCropModal } from "./AvatarCropModal";
+import { AssessmentHistoryModal } from "./AssessmentHistoryModal";
+import { ReleaseNotesModal } from "./ReleaseNotesModal";
 import { useLanguage } from "@/context/language-context";
+import { latestVersion } from "@/lib/release_notes";
 import Image from "next/image";
 
 export function UserMenu() {
@@ -16,8 +20,12 @@ export function UserMenu() {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isSettingsModalOpen, setIsSettingsModalOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
+  const [isReleaseNotesOpen, setIsReleaseNotesOpen] = useState(false);
+  const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
+  const [releaseNotesMode, setReleaseNotesMode] = useState<"latest" | "history">("history");
   const [isEditingName, setIsEditingName] = useState(false);
   const [newName, setNewName] = useState("");
+  const [cropImage, setCropImage] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const menuRef = useRef<HTMLDivElement>(null);
@@ -59,9 +67,17 @@ export function UserMenu() {
     const reader = new FileReader();
     reader.onloadend = async () => {
       const base64String = reader.result as string;
-      await updateProfile({ avatar: base64String });
+      setCropImage(base64String);
+      // await updateProfile({ avatar: base64String });
     };
     reader.readAsDataURL(file);
+    // Reset input so same file can be selected again
+    e.target.value = "";
+  };
+
+  const handleSaveCrop = async (croppedImage: string) => {
+    await updateProfile({ avatar: croppedImage });
+    setCropImage(null);
   };
 
   // Loading state placeholder
@@ -86,18 +102,26 @@ export function UserMenu() {
           {t('login')}
         </button>
         <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
-      </>
-    );
-  }
+      {cropImage && (
+        <AvatarCropModal
+          isOpen={!!cropImage}
+          onClose={() => setCropImage(null)}
+          imageUrl={cropImage}
+          onSave={handleSaveCrop}
+        />
+      )}
+    </>
+  );
+}
 
   return (
     <div className="relative" ref={menuRef}>
       {/* Avatar Button */}
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 p-1 pl-2 pr-1 rounded-full bg-white border border-gray-200 shadow-sm hover:shadow-md transition-all group"
+        className="flex items-center md:gap-2 md:p-1 md:pl-2 md:pr-1 rounded-full md:bg-white md:dark:bg-[#1E1E1E] md:border md:border-gray-200 md:dark:border-[#333333] md:shadow-sm md:hover:shadow-md transition-all group"
       >
-        <span className="text-sm font-medium text-gray-700 group-hover:text-[#060E9F] max-w-[100px] truncate">
+        <span className="hidden md:block text-sm font-medium text-gray-700 dark:text-gray-200 group-hover:text-[#060E9F] dark:group-hover:text-blue-400 max-w-[100px] truncate">
           {user.name || user.email.split('@')[0]}
         </span>
         {user.avatar ? (
@@ -117,8 +141,8 @@ export function UserMenu() {
 
       {/* Dropdown Menu */}
       {isOpen && (
-        <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl shadow-xl border border-gray-100 py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
-          <div className="px-4 py-3 border-b border-gray-100">
+        <div className="absolute right-0 top-full mt-2 w-64 bg-white dark:bg-[#2C2C2C] rounded-xl shadow-xl border border-gray-100 dark:border-dark-border py-2 z-50 animate-in fade-in zoom-in-95 duration-200">
+          <div className="px-4 py-3 border-b border-gray-100 dark:border-dark-border">
             <div className="flex items-center gap-3 mb-2">
               <div className="relative group/avatar cursor-pointer" onClick={handleAvatarClick}>
                  {user.avatar ? (
@@ -153,7 +177,7 @@ export function UserMenu() {
                   </div>
                 ) : (
                   <div className="flex items-center justify-between group">
-                    <p className="font-bold text-gray-900 truncate" title={user.name}>
+                    <p className="font-bold text-gray-900 dark:text-dark-text-primary truncate" title={user.name}>
                       {user.name || t('notSetNickname')}
                     </p>
                     <button 
@@ -161,13 +185,13 @@ export function UserMenu() {
                         setNewName(user.name || "");
                         setIsEditingName(true);
                       }}
-                      className="text-gray-400 hover:text-[#060E9F] opacity-0 group-hover:opacity-100 transition-opacity"
+                      className="text-gray-400 hover:text-[#060E9F] dark:text-dark-text-muted dark:hover:text-blue-400 opacity-0 group-hover:opacity-100 transition-opacity"
                     >
                       <Edit2 className="w-3 h-3" />
                     </button>
                   </div>
                 )}
-                <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                <p className="text-xs text-gray-500 dark:text-dark-text-secondary truncate">{user.email}</p>
               </div>
             </div>
           </div>
@@ -175,9 +199,9 @@ export function UserMenu() {
           <div className="py-1">
             <button
               onClick={handleAvatarClick}
-              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-dark-text-primary hover:bg-gray-50 dark:hover:bg-[#383838] flex items-center gap-3 transition-colors"
             >
-              <Camera className="w-4 h-4 text-gray-400" />
+              <Camera className="w-4 h-4 text-gray-400 dark:text-dark-text-muted" />
               {t('changeAvatar')}
             </button>
              <button
@@ -185,9 +209,9 @@ export function UserMenu() {
                 setNewName(user.name || "");
                 setIsEditingName(true);
               }}
-              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-dark-text-primary hover:bg-gray-50 dark:hover:bg-[#383838] flex items-center gap-3 transition-colors"
             >
-              <UserCircle className="w-4 h-4 text-gray-400" />
+              <UserCircle className="w-4 h-4 text-gray-400 dark:text-dark-text-muted" />
               {t('changeUsername')}
             </button>
             <button
@@ -195,20 +219,41 @@ export function UserMenu() {
                 setIsOpen(false);
                 setIsChangePasswordOpen(true);
               }}
-              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-3 transition-colors"
+              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-dark-text-primary hover:bg-gray-50 dark:hover:bg-[#383838] flex items-center gap-3 transition-colors"
             >
-              <Lock className="w-4 h-4 text-gray-400" />
+              <Lock className="w-4 h-4 text-gray-400 dark:text-dark-text-muted" />
               修改密码
+            </button>
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                setIsHistoryModalOpen(true);
+              }}
+              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-dark-text-primary hover:bg-gray-50 dark:hover:bg-[#383838] flex items-center gap-3 transition-colors"
+            >
+              <FileText className="w-4 h-4 text-gray-400 dark:text-dark-text-muted" />
+              历史评测结果
+            </button>
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                setReleaseNotesMode("history");
+                setIsReleaseNotesOpen(true);
+              }}
+              className="w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-dark-text-primary hover:bg-gray-50 dark:hover:bg-[#383838] flex items-center gap-3 transition-colors"
+            >
+              <History className="w-4 h-4 text-gray-400 dark:text-dark-text-muted" />
+              更新历史
             </button>
           </div>
 
-          <div className="border-t border-gray-100 mt-1 pt-1">
+          <div className="border-t border-gray-100 dark:border-dark-border mt-1 pt-1">
             <button
               onClick={() => {
                 logout();
                 setIsOpen(false);
               }}
-              className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-3 transition-colors"
+              className="w-full text-left px-4 py-2.5 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-3 transition-colors"
             >
               <LogOut className="w-4 h-4" />
               {t('logout')}
@@ -219,14 +264,36 @@ export function UserMenu() {
 
       <SettingsModal isOpen={isSettingsModalOpen} onClose={() => setIsSettingsModalOpen(false)} />
       <ChangePasswordModal isOpen={isChangePasswordOpen} onClose={() => setIsChangePasswordOpen(false)} />
+      <AssessmentHistoryModal
+        isOpen={isHistoryModalOpen}
+        onClose={() => setIsHistoryModalOpen(false)}
+      />
+      <ReleaseNotesModal 
+        isOpen={isReleaseNotesOpen} 
+        onClose={() => {
+          setIsReleaseNotesOpen(false);
+          if (releaseNotesMode === "latest") {
+            localStorage.setItem("last_seen_version", latestVersion);
+          }
+        }} 
+        mode={releaseNotesMode} 
+      />
       <AuthModal isOpen={isAuthModalOpen} onClose={() => setIsAuthModalOpen(false)} />
       <input
         type="file"
         ref={fileInputRef}
         onChange={handleFileChange}
-        accept="image/*"
         className="hidden"
+        accept="image/*"
       />
+      {cropImage && (
+        <AvatarCropModal
+          isOpen={!!cropImage}
+          onClose={() => setCropImage(null)}
+          imageUrl={cropImage}
+          onSave={handleSaveCrop}
+        />
+      )}
     </div>
   );
 }

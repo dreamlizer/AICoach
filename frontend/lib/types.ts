@@ -23,7 +23,7 @@ export type DebugInfo = {
       stage4: string;
   };
   stage1: {
-    intent: "DECISION" | "EMOTIONAL" | "QUERY" | "CHAT" | "tool_execution";
+    intent: string;
     sentiment: string;
     complexity: "HIGH" | "LOW" | "high" | "low";
     keywords: string[];
@@ -31,6 +31,12 @@ export type DebugInfo = {
   stage2_memory: string;
   stage3_strategy?: string | null;
   stage5_profile?: UserProfile | null;
+  stats?: {
+    stage1: { duration: string; tokens: string };
+    stage3: { duration: string; tokens: string };
+    stage4: { duration: string; tokens: string };
+    total: { duration: string; tokens: string };
+  };
 };
 
 export type Message = {
@@ -39,6 +45,7 @@ export type Message = {
   content: string;
   kind?: "text" | "card" | "thinking" | "analysis" | "canvas";
   status?: "analyzing" | "thinking" | "replying" | "done"; // New field for thinking state
+  thinking_keywords?: string[]; // Keywords for dynamic thinking display
   debugInfo?: DebugInfo;
   canvasHtml?: string;
   created_at?: string;
@@ -46,6 +53,7 @@ export type Message = {
 
 export type HistoryItem = {
   id: string;
+  short_code?: string | null;
   title: string;
   created_at: string;
   updated_at?: string;
@@ -54,8 +62,27 @@ export type HistoryItem = {
 };
 
 export interface Stage1Analysis {
-  intent: "DECISION" | "EMOTIONAL" | "QUERY" | "CHAT" | "tool_execution";
+  intent: string;
   sentiment: string;
   complexity: "HIGH" | "LOW" | "high" | "low";
   keywords: string[];
 }
+
+export type ExecutiveTool = {
+  id: string;
+  name: string;
+  tagPrefix: string;
+  description: string;
+  icon: "target" | "stethoscope" | "radar" | "compass" | "scissors" | "map" | "zap" | "brain" | "siren" | "branch" | "message" | "ear" | "users" | "coffee" | "puzzle" | "eye" | "activity";
+  category: "self" | "team" | "system" | "partner" | "magic" | "assessment";
+  slogan: [string, string];
+  prompt: string;
+  placeholder?: string;
+  nameEn?: string;
+  details?: {
+    title: string;
+    introduction: string;
+    usage: string;
+    outcome: string;
+  };
+};

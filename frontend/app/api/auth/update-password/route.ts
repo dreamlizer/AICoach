@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
-import { getCurrentUser } from "@/lib/session";
+import { getCurrentUser, validatePassword } from "@/lib/session";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
@@ -9,6 +9,11 @@ export async function POST(request: Request) {
 
     if (!oldPassword || !newPassword) {
       return NextResponse.json({ error: "原密码和新密码不能为空" }, { status: 400 });
+    }
+
+    const passwordError = validatePassword(newPassword);
+    if (passwordError) {
+      return NextResponse.json({ error: passwordError }, { status: 400 });
     }
 
     const user = getCurrentUser();

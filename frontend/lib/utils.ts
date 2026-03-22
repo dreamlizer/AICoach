@@ -49,7 +49,31 @@ export const generateToolSuffix = () => {
 };
 
 export const formatDateTime = (date: string | Date, language: string = 'zh') => {
-  return new Date(date).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', { 
+  if (!date) return '';
+  
+  // Fix Safari/iOS issue with "YYYY-MM-DD HH:MM:SS" format
+  // Safari requires "YYYY/MM/DD" or "YYYY-MM-DDT..." (ISO 8601)
+  const dateObj = typeof date === 'string' 
+    ? new Date(date.replace(/-/g, '/')) 
+    : date;
+
+  // Check for invalid date
+  if (isNaN(dateObj.getTime())) {
+    // Try ISO format fallback if slash replacement didn't work (though it usually does)
+    const isoDate = typeof date === 'string' ? new Date(date.replace(' ', 'T')) : date;
+    if (isNaN((isoDate as Date).getTime())) {
+      return '';
+    }
+    return (isoDate as Date).toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', { 
+      month: '2-digit', 
+      day: '2-digit', 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      hour12: false 
+    }).replace(/\//g, '-');
+  }
+
+  return dateObj.toLocaleString(language === 'zh' ? 'zh-CN' : 'en-US', { 
     month: '2-digit', 
     day: '2-digit', 
     hour: '2-digit', 
@@ -123,13 +147,27 @@ export function processHistoryMessage(msg: any): Message[] {
 }
 
 export function generateUUID() {
-  if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-    return crypto.randomUUID();
+  try {
+    if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+      return crypto.randomUUID();
+    }
+  } catch (e) {
+    // Ignore error and fall back
   }
+  
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
     var r = Math.random() * 16 | 0,
       v = c == 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
   });
+}
+
+/**
+ * Detect if the current browser is WeChat built-in browser
+ */
+export function isWeChatBrowser(): boolean {
+  if (typeof window === 'undefined') return false;
+  const ua = navigator.userAgent.toLowerCase();
+  return ua.includes('micromessenger');
 }
 

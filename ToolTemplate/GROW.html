@@ -333,7 +333,7 @@
                     <div class="step-main">
                         <h2 class="step-title" contenteditable="true">Goal / 目标确立</h2>
                         <div class="step-content" contenteditable="true">
-                            未来三个月内，将产品交付周期从 <span class="highlight-text">22天</span> 缩短至 <span class="highlight-text">15天</span>，实现团队效能突破。
+                            {{GOAL}}
                         </div>
                     </div>
                 </section>
@@ -346,9 +346,7 @@
                     <div class="step-main">
                         <h2 class="step-title" contenteditable="true">Reality / 现状分析</h2>
                         <div class="step-content" contenteditable="true">
-                            <div class="list-item">需求变更频繁，导致约 30% 的重复开发量。</div>
-                            <div class="list-item">跨部门协作平均耗时 4.5 天，流程节点过多。</div>
-                            <div class="list-item">测试环境手动部署，缺乏自动化流水线支持。</div>
+                            {{REALITY_LIST}}
                         </div>
                     </div>
                 </section>
@@ -361,9 +359,7 @@
                     <div class="step-main">
                         <h2 class="step-title" contenteditable="true">Options / 方案选择</h2>
                         <div class="step-content" contenteditable="true">
-                            <div class="list-item">推行看板管理，严格执行需求准入审查机制。</div>
-                            <div class="list-item">引入 CI/CD 自动化流水线，降低人为操作风险。</div>
-                            <div class="list-item">下放日常决策权，简化非核心业务的审批路径。</div>
+                            {{OPTIONS_LIST}}
                         </div>
                     </div>
                 </section>
@@ -376,17 +372,15 @@
                     <div class="step-main">
                         <h2 class="step-title" contenteditable="true">Will / 意愿行动</h2>
                         <div class="step-content" contenteditable="true">
-                            <div class="list-item"><strong>即刻：</strong> 开启全流程瓶颈审计会议。</div>
-                            <div class="list-item"><strong>周五：</strong> 确认技术改造负责人与首阶段节点。</div>
-                            <div class="list-item"><strong>机制：</strong> 启动每周五的效能复盘反馈闭环。</div>
+                            {{WILL_LIST}}
                         </div>
                     </div>
                 </section>
             </main>
 
             <footer class="footer">
-                <div class="slogan-cn" contenteditable="true">见微知著，引领战略全局</div>
-                <div class="footer-sub" contenteditable="true">Strategic Leadership • Executive Coaching Card</div>
+                <div class="slogan-cn" contenteditable="true">{{SLOGAN_CN}}</div>
+                <div class="footer-sub" contenteditable="true">{{FOOTER_SUB}}</div>
             </footer>
         </div>
     </div>
@@ -398,55 +392,73 @@
         }
 
         // 2. 字号调整
-        let currentSize = 0.88;
         function changeFontSize(delta) {
-            currentSize = Math.max(0.7, Math.min(1.2, currentSize + delta * 0.05));
-            document.documentElement.style.setProperty('--body-font-size', currentSize + 'rem');
+            const root = document.documentElement;
+            const current = parseFloat(getComputedStyle(root).getPropertyValue('--body-font-size'));
+            if ((delta < 0 && current > 0.7) || (delta > 0 && current < 1.2)) {
+                root.style.setProperty('--body-font-size', (current + delta * 0.05) + 'rem');
+            }
         }
 
-        // 3. 行间距调整
+        // 3. 行高调整
         function changeLineHeight(val) {
             document.documentElement.style.setProperty('--line-height', val);
         }
 
-        // 4. 配色方案切换
+        // 4. 主题切换
         const themes = ['', 'theme-emerald', 'theme-slate', 'theme-red'];
         let currentThemeIndex = 0;
+        
         function nextTheme() {
-            const card = document.getElementById('main-card');
-            card.classList.remove(...themes.filter(t => t !== ''));
             currentThemeIndex = (currentThemeIndex + 1) % themes.length;
-            if (themes[currentThemeIndex]) {
-                card.classList.add(themes[currentThemeIndex]);
+            document.body.className = document.body.className.replace(/theme-\w+/g, '').trim() + ' ' + themes[currentThemeIndex];
+            // 保持字体设置
+            const font = document.getElementById('font-select').value;
+            if (!document.body.classList.contains('font-' + font)) {
+                document.body.classList.add('font-' + font);
             }
         }
 
-        // 5. 存为图片
-        function saveAsImage() {
+        // 5. 保存图片
+        async function saveAsImage() {
+            const btn = document.querySelector('.btn-save');
+            const originalText = btn.innerText;
             const loading = document.getElementById('export-loading');
-            const card = document.getElementById('main-card');
             
-            loading.style.display = 'flex';
-            
-            setTimeout(() => {
-                html2canvas(card, {
-                    scale: 3, 
+            try {
+                btn.innerText = '生成中...';
+                loading.style.display = 'flex';
+                
+                // 隐藏控制栏
+                document.getElementById('control-panel').style.display = 'none';
+                
+                const element = document.getElementById('capture-area');
+                const canvas = await html2canvas(element, {
+                    scale: 3, // 高清导出
                     useCORS: true,
-                    backgroundColor: null,
+                    backgroundColor: document.body.style.backgroundColor || '#e2e8f0',
                     logging: false
-                }).then(canvas => {
-                    const link = document.createElement('a');
-                    link.download = 'Executive_GROW_Card.png';
-                    link.href = canvas.toDataURL('image/png');
-                    link.click();
-                    loading.style.display = 'none';
-                }).catch(err => {
-                    console.error("导出失败:", err);
-                    loading.style.display = 'none';
                 });
-            }, 100);
+
+                // 恢复显示
+                document.getElementById('control-panel').style.display = 'flex';
+                loading.style.display = 'none';
+                btn.innerText = originalText;
+
+                // 下载
+                const link = document.createElement('a');
+                link.download = 'GROW-Card-' + new Date().getTime() + '.png';
+                link.href = canvas.toDataURL('image/png');
+                link.click();
+                
+            } catch (err) {
+                console.error(err);
+                alert('图片生成失败，请重试');
+                document.getElementById('control-panel').style.display = 'flex';
+                loading.style.display = 'none';
+                btn.innerText = originalText;
+            }
         }
     </script>
-
 </body>
 </html>

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Moon, Sun, Monitor, BrainCircuit, HeartHandshake, CheckCircle2, Globe, Type, User } from 'lucide-react';
+import { X, Moon, Sun, Monitor, BrainCircuit, HeartHandshake, CheckCircle2 } from 'lucide-react';
 import { usePreferences } from '@/context/preferences-context';
 import { useLanguage } from '@/context/language-context';
 
@@ -12,9 +12,13 @@ interface SettingsModalProps {
 }
 
 export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
-  const { theme, setTheme, fontSize, setFontSize, partnerStyle, setPartnerStyle } = usePreferences();
+  const { theme, setTheme, fontSize, setFontSize, partnerStyle, setPartnerStyle, modelProvider, setModelProvider } = usePreferences();
   const { language, setLanguage, t } = useLanguage();
   const [mounted, setMounted] = useState(false);
+  const modelIndex = modelProvider === 'deepseek' ? 0 : 1;
+  const languageIndex = language === 'zh' ? 0 : 1;
+  const themeIndex = theme === 'light' ? 0 : theme === 'dark' ? 1 : 2;
+  const fontSizeIndex = fontSize === 'default' ? 0 : fontSize === 'medium' ? 1 : 2;
 
   useEffect(() => {
     setMounted(true);
@@ -25,46 +29,75 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
   return createPortal(
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/20 backdrop-blur-sm animate-in fade-in duration-200">
       <div 
-        className="w-[440px] max-w-[95vw] bg-white dark:bg-gray-800 rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
+        className="w-[440px] max-w-[95vw] bg-white dark:bg-[#1E1E1E] rounded-2xl shadow-2xl overflow-hidden animate-in zoom-in-95 duration-200"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-gray-700">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 dark:border-[#333333]">
           <h2 className="text-lg font-bold text-[#202124] dark:text-white">{t('settings')}</h2>
           <button 
             onClick={onClose}
-            className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-full transition-colors"
+            className="p-1.5 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 hover:bg-gray-100 dark:hover:bg-[#2C2C2C] rounded-full transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="p-5 space-y-3 overflow-y-auto">
+        <div className="p-5 space-y-4 overflow-y-auto">
+
+          <section className="bg-white dark:bg-[#1E1E1E] border border-gray-100 dark:border-[#333333] rounded-xl p-3">
+            <div className="relative flex p-1 bg-[#F1F3F4] dark:bg-[#121212] rounded-full">
+              <div
+                className="absolute inset-y-1 left-1 w-1/2 rounded-full bg-white dark:bg-[#2C2C2C] shadow-sm transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(${modelIndex * 100}%)` }}
+              />
+              <button
+                onClick={() => setModelProvider('deepseek')}
+                className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                  modelProvider === 'deepseek'
+                    ? 'text-[#1A73E8] dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                Deepseek
+              </button>
+              <button
+                onClick={() => setModelProvider('doubao')}
+                className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                  modelProvider === 'doubao'
+                    ? 'text-[#1A73E8] dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                豆包
+              </button>
+            </div>
+          </section>
 
           {/* Language Selection */}
-          <section className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-3">
-            <div className="flex items-center gap-3 mb-3">
-               <Globe className="w-5 h-5 text-gray-400 stroke-[1]" />
-               <h3 className="text-xs font-semibold text-[#202124] dark:text-gray-100 uppercase tracking-wider">{t('language')}</h3>
-            </div>
-            <div className="flex p-1 bg-[#F1F3F4] dark:bg-gray-700 rounded-full">
+          <section className="bg-white dark:bg-[#1E1E1E] border border-gray-100 dark:border-[#333333] rounded-xl p-3">
+            <div className="relative flex p-1 bg-[#F1F3F4] dark:bg-[#121212] rounded-full">
+              <div
+                className="absolute inset-y-1 left-1 w-1/2 rounded-full bg-white dark:bg-[#2C2C2C] shadow-sm transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(${languageIndex * 100}%)` }}
+              />
               <button
                 onClick={() => setLanguage('zh')}
-                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-all ${
+                className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-colors ${
                   language === 'zh' 
-                    ? 'bg-white text-[#1A73E8] shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-[#1A73E8] dark:text-blue-400' 
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
               >
                 中文
               </button>
               <button
                 onClick={() => setLanguage('en')}
-                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-all ${
+                className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-colors ${
                   language === 'en' 
-                    ? 'bg-white text-[#1A73E8] shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-[#1A73E8] dark:text-blue-400' 
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
               >
                 English
@@ -73,18 +106,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </section>
           
           {/* A. Appearance */}
-          <section className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-3">
-            <div className="flex items-center gap-3 mb-3">
-               <Monitor className="w-5 h-5 text-gray-400 stroke-[1]" />
-               <h3 className="text-xs font-semibold text-[#202124] dark:text-gray-100 uppercase tracking-wider">{t('appearance')}</h3>
-            </div>
-            <div className="flex p-1 bg-[#F1F3F4] dark:bg-gray-700 rounded-full">
+          <section className="bg-white dark:bg-[#1E1E1E] border border-gray-100 dark:border-[#333333] rounded-xl p-3">
+            <div className="relative flex p-1 bg-[#F1F3F4] dark:bg-[#121212] rounded-full">
+              <div
+                className="absolute inset-y-1 left-1 w-1/3 rounded-full bg-white dark:bg-[#2C2C2C] shadow-sm transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(${themeIndex * 100}%)` }}
+              />
               <button
                 onClick={() => setTheme('light')}
-                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-all ${
+                className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-colors ${
                   theme === 'light' 
-                    ? 'bg-white text-[#1A73E8] shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-[#1A73E8] dark:text-blue-400' 
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
               >
                 <Sun className="w-3.5 h-3.5" />
@@ -92,10 +125,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </button>
               <button
                 onClick={() => setTheme('dark')}
-                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-all ${
+                className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-colors ${
                   theme === 'dark' 
-                    ? 'bg-white text-[#1A73E8] shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-[#1A73E8] dark:text-blue-400' 
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
                 }`}
               >
                 <Moon className="w-3.5 h-3.5" />
@@ -103,10 +136,10 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
               </button>
               <button
                 onClick={() => setTheme('auto')}
-                className={`flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-all ${
+                className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-colors ${
                   theme === 'auto' 
-                    ? 'bg-white text-[#1A73E8] shadow-sm' 
-                    : 'text-gray-500 hover:text-gray-700'
+                    ? 'text-[#1A73E8] dark:text-blue-400' 
+                    : 'text-gray-500 dark:text-dark-text-secondary hover:text-gray-700 dark:hover:text-dark-text-primary'
                 }`}
               >
                 <Monitor className="w-3.5 h-3.5" />
@@ -116,89 +149,65 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           </section>
 
           {/* B. Typography */}
-          <section className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-3">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
-                <Type className="w-5 h-5 text-gray-400 stroke-[1]" />
-                <h3 className="text-xs font-semibold text-[#202124] dark:text-gray-100 uppercase tracking-wider">{t('typography')}</h3>
-              </div>
-              <span className="text-[10px] text-[#70757A] dark:text-gray-400 font-medium bg-gray-100 px-1.5 py-0.5 rounded-md">
-                {fontSize === 'default' ? t('standard') : fontSize === 'medium' ? t('medium') : t('large')}
-              </span>
-            </div>
-            
-            {/* Custom Segmented Control for Font Size */}
-            <div className="relative pt-4 pb-1 px-4">
-               {/* Track line */}
-              <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-[#F1F3F4] dark:bg-gray-700 rounded-full -translate-y-1/2 mx-6" />
-              
-              <div className="relative flex justify-between">
-                {/* Option 1: Default */}
-                <button 
-                  onClick={() => setFontSize('default')}
-                  className="group relative flex flex-col items-center focus:outline-none"
-                >
-                  <div className={`w-3.5 h-3.5 rounded-full border-2 z-10 transition-colors shadow-sm ${
-                    fontSize === 'default' ? 'bg-[#1A73E8] border-[#1A73E8]' : 'bg-white border-gray-300 group-hover:border-[#1A73E8]/50'
-                  }`} />
-                  <span className={`absolute top-5 text-[10px] font-medium transition-colors ${
-                    fontSize === 'default' ? 'text-[#1A73E8]' : 'text-[#70757A]'
-                  }`}>Aa</span>
-                </button>
-
-                {/* Option 2: Medium */}
-                <button 
-                  onClick={() => setFontSize('medium')}
-                  className="group relative flex flex-col items-center focus:outline-none"
-                >
-                   <div className={`w-4 h-4 rounded-full border-2 z-10 transition-colors shadow-sm ${
-                    fontSize === 'medium' ? 'bg-[#1A73E8] border-[#1A73E8]' : 'bg-white border-gray-300 group-hover:border-[#1A73E8]/50'
-                  }`} />
-                   <span className={`absolute top-6 text-xs font-medium transition-colors ${
-                    fontSize === 'medium' ? 'text-[#1A73E8]' : 'text-[#70757A]'
-                  }`}>Aa</span>
-                </button>
-
-                {/* Option 3: Large */}
-                <button 
-                  onClick={() => setFontSize('large')}
-                  className="group relative flex flex-col items-center focus:outline-none"
-                >
-                   <div className={`w-5 h-5 rounded-full border-2 z-10 transition-colors shadow-sm ${
-                    fontSize === 'large' ? 'bg-[#1A73E8] border-[#1A73E8]' : 'bg-white border-gray-300 group-hover:border-[#1A73E8]/50'
-                  }`} />
-                   <span className={`absolute top-7 text-sm font-medium transition-colors ${
-                    fontSize === 'large' ? 'text-[#1A73E8]' : 'text-[#70757A]'
-                  }`}>Aa</span>
-                </button>
-              </div>
+          <section className="bg-white dark:bg-[#1E1E1E] border border-gray-100 dark:border-[#333333] rounded-xl p-3">
+            <div className="relative flex p-1 bg-[#F1F3F4] dark:bg-[#121212] rounded-full">
+              <div
+                className="absolute inset-y-1 left-1 w-1/3 rounded-full bg-white dark:bg-[#2C2C2C] shadow-sm transition-transform duration-300 ease-out"
+                style={{ transform: `translateX(${fontSizeIndex * 100}%)` }}
+              />
+              <button
+                onClick={() => setFontSize('default')}
+                className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                  fontSize === 'default'
+                    ? 'text-[#1A73E8] dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                {t('standard')}
+              </button>
+              <button
+                onClick={() => setFontSize('medium')}
+                className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                  fontSize === 'medium'
+                    ? 'text-[#1A73E8] dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                {t('medium')}
+              </button>
+              <button
+                onClick={() => setFontSize('large')}
+                className={`relative z-10 flex-1 flex items-center justify-center gap-2 py-1.5 text-xs font-medium rounded-full transition-colors ${
+                  fontSize === 'large'
+                    ? 'text-[#1A73E8] dark:text-blue-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200'
+                }`}
+              >
+                {t('large')}
+              </button>
             </div>
           </section>
 
           {/* C. Partner Persona */}
-          <section className="bg-white dark:bg-gray-800 border border-gray-100 dark:border-gray-700 rounded-xl p-3">
-            <div className="flex items-center gap-3 mb-3">
-               <User className="w-5 h-5 text-gray-400 stroke-[1]" />
-               <h3 className="text-xs font-semibold text-[#202124] dark:text-gray-100 uppercase tracking-wider">{t('partnerPersona')}</h3>
-            </div>
+          <section className="bg-white dark:bg-[#1E1E1E] border border-gray-100 dark:border-[#333333] rounded-xl p-3">
             <div className="grid grid-cols-2 gap-3">
               {/* Option 1: Rational */}
               <div 
                 onClick={() => setPartnerStyle('rational')}
                 className={`relative p-3 rounded-lg border cursor-pointer transition-all duration-200 group hover:shadow-sm ${
                   partnerStyle === 'rational' 
-                    ? 'border-[#1A73E8] bg-[#1A73E8]/5' 
-                    : 'border-gray-200 bg-white hover:border-[#1A73E8]/30'
+                    ? 'border-[#1A73E8] dark:border-blue-400 bg-[#1A73E8]/5 dark:bg-[#1A73E8]/10' 
+                    : 'border-gray-200 dark:border-[#333333] bg-white dark:bg-[#1E1E1E] hover:border-[#1A73E8]/30 dark:hover:border-blue-400/30'
                 }`}
               >
                 <div className="flex items-start justify-between mb-1.5">
                   <div className={`p-1.5 rounded-md ${
-                     partnerStyle === 'rational' ? 'bg-[#1A73E8] text-white' : 'bg-gray-100 text-gray-500 group-hover:text-[#1A73E8]'
+                     partnerStyle === 'rational' ? 'bg-[#1A73E8] dark:bg-blue-400 text-white' : 'bg-gray-100 dark:bg-[#2C2C2C] text-gray-500 dark:text-gray-400 group-hover:text-[#1A73E8] dark:group-hover:text-blue-400'
                   }`}>
                     <BrainCircuit className="w-4 h-4" />
                   </div>
                   {partnerStyle === 'rational' && (
-                    <CheckCircle2 className="w-4 h-4 text-[#1A73E8]" />
+                    <CheckCircle2 className="w-4 h-4 text-[#1A73E8] dark:text-blue-400" />
                   )}
                 </div>
                 <div className="font-medium text-xs text-[#202124] dark:text-white mb-0.5">{t('rational')}</div>
@@ -209,18 +218,18 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 onClick={() => setPartnerStyle('empathetic')}
                 className={`relative p-3 rounded-lg border cursor-pointer transition-all duration-200 group hover:shadow-sm ${
                   partnerStyle === 'empathetic' 
-                    ? 'border-[#1A73E8] bg-[#1A73E8]/5' 
-                    : 'border-gray-200 bg-white hover:border-[#1A73E8]/30'
+                    ? 'border-[#1A73E8] dark:border-blue-400 bg-[#1A73E8]/5 dark:bg-[#1A73E8]/10' 
+                    : 'border-gray-200 dark:border-[#333333] bg-white dark:bg-[#1E1E1E] hover:border-[#1A73E8]/30 dark:hover:border-blue-400/30'
                 }`}
               >
                 <div className="flex items-start justify-between mb-1.5">
                   <div className={`p-1.5 rounded-md ${
-                     partnerStyle === 'empathetic' ? 'bg-[#1A73E8] text-white' : 'bg-gray-100 text-gray-500 group-hover:text-[#1A73E8]'
+                     partnerStyle === 'empathetic' ? 'bg-[#1A73E8] dark:bg-blue-400 text-white' : 'bg-gray-100 dark:bg-[#2C2C2C] text-gray-500 dark:text-gray-400 group-hover:text-[#1A73E8] dark:group-hover:text-blue-400'
                   }`}>
                     <HeartHandshake className="w-4 h-4" />
                   </div>
                   {partnerStyle === 'empathetic' && (
-                    <CheckCircle2 className="w-4 h-4 text-[#1A73E8]" />
+                    <CheckCircle2 className="w-4 h-4 text-[#1A73E8] dark:text-blue-400" />
                   )}
                 </div>
                 <div className="font-medium text-xs text-[#202124] dark:text-white mb-0.5">{t('empathetic')}</div>

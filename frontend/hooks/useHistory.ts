@@ -1,26 +1,37 @@
 import { useState, useEffect, useCallback } from "react";
 import { HistoryItem } from "@/lib/types";
+import { useAuth } from "@/context/auth-context";
+import { apiClient } from "@/lib/api-client";
+import { SAMPLE_CONVERSATIONS } from "@/lib/sample_data";
 
 export function useHistory() {
+  const { user } = useAuth();
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [historyLoading, setHistoryLoading] = useState(true);
 
   const fetchHistory = useCallback((silent = false) => {
+    // If no user is logged in, show sample conversations instead of fetching from API
+    // This prevents anonymous users from seeing a shared pool of history
+    if (!user) {
+      setHistory(SAMPLE_CONVERSATIONS);
+      setHistoryLoading(false);
+      return;
+    }
+
     if (!silent) setHistoryLoading(true);
-    fetch("/api/history", { cache: "no-store" })
-      .then((response) => response.json())
-      .then((data: HistoryItem[]) => {
+    apiClient.history.list()
+      .then((data) => {
         setHistory(data);
       })
       .catch((err) => console.error("Failed to load history:", err))
       .finally(() => {
         if (!silent) setHistoryLoading(false);
       });
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchHistory();
-  }, [fetchHistory]);
+  }, [fetchHistory, user]);
 
   return {
     history,

@@ -1,4 +1,5 @@
 import path from "path";
+import fs from "fs";
 import Database from "better-sqlite3";
 import { UserProfile } from "./types";
 
@@ -9,12 +10,30 @@ export interface User {
   avatar?: string;
   created_at: string;
   password_hash?: string;
+  role?: string;
 }
 
 // Better-sqlite3 types
 type DatabaseInstance = import("better-sqlite3").Database;
 
-const dbPath = path.join(process.cwd(), "sqlite.db");
+const resolveDbPath = () => {
+  const envPath = (process.env.SQLITE_DB_PATH || process.env.DB_PATH || "").trim();
+  if (envPath) {
+    return path.isAbsolute(envPath) ? envPath : path.join(process.cwd(), envPath);
+  }
+  if (process.env.NODE_ENV === "production") {
+    const tmpDir = process.env.TMPDIR || process.env.TEMP || process.env.TMP || "/tmp";
+    return path.join(tmpDir, "sqlite.db");
+  }
+  return path.join(process.cwd(), "sqlite.db");
+};
+
+const ensureDbDir = (dbFilePath: string) => {
+  const dir = path.dirname(dbFilePath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+};
 
 // Use a global variable to store the database instance in development
 // to prevent multiple connections during hot reloading
@@ -23,8 +42,30 @@ const globalForDb = global as unknown as {
   isInitialized: boolean | undefined;
 };
 
+const SHORT_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789";
+
+const randomShortCode = (length = 8) => {
+  let value = "";
+  for (let i = 0; i < length; i += 1) {
+    value += SHORT_CODE_CHARS[Math.floor(Math.random() * SHORT_CODE_CHARS.length)];
+  }
+  return value;
+};
+
+const generateUniqueShortCode = (db: DatabaseInstance) => {
+  const checkStmt = db.prepare("SELECT 1 FROM conversations WHERE short_code = ? LIMIT 1");
+  for (let i = 0; i < 12; i += 1) {
+    const code = randomShortCode(8);
+    const exists = checkStmt.get(code);
+    if (!exists) return code;
+  }
+  return `${Date.now().toString(36).slice(-4)}${randomShortCode(4)}`;
+};
+
 export const getDb = () => {
   if (!globalForDb.dbInstance) {
+    const dbPath = resolveDbPath();
+    ensureDbDir(dbPath);
     globalForDb.dbInstance = new Database(dbPath);
     initializeSchema(globalForDb.dbInstance);
     globalForDb.isInitialized = true;
@@ -43,7 +84,9 @@ const initializeSchema = (db: DatabaseInstance) => {
        title TEXT NOT NULL, 
        created_at TEXT NOT NULL,
        updated_at TEXT NOT NULL,
-       tool_id TEXT
+       tool_id TEXT,
+       user_id INTEGER,
+       short_code TEXT
      )`
   );
   db.exec(
@@ -93,9 +136,112 @@ const initializeSchema = (db: DatabaseInstance) => {
     if (!hasPasswordHash) {
       db.exec("ALTER TABLE users ADD COLUMN password_hash TEXT");
     }
+    const hasRole = columns.some(col => col.name === "role");
+    if (!hasRole) {
+      db.exec("ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'");
+    }
   } catch (e) {
     console.error("Schema migration error (users):", e);
   }
+
+  // --- Merged Stats Tables ---
+  // identifier can be 'user:123' or 'ip:192.168.1.1'
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS usage_stats (
+       identifier TEXT PRIMARY KEY,
+       identifier_type TEXT NOT NULL, 
+       total_tokens INTEGER DEFAULT 0,
+       input_tokens INTEGER DEFAULT 0,
+       output_tokens INTEGER DEFAULT 0,
+       cache_hit_tokens INTEGER DEFAULT 0,
+       cache_miss_tokens INTEGER DEFAULT 0,
+       last_updated TEXT
+     )`
+  );
+  
+  // Daily Usage Stats (Tokens, Messages, Words)
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS daily_usage_stats (
+       identifier TEXT,
+       date TEXT,
+       total_tokens INTEGER DEFAULT 0,
+       input_tokens INTEGER DEFAULT 0,
+       output_tokens INTEGER DEFAULT 0,
+       message_count INTEGER DEFAULT 0,
+       word_count INTEGER DEFAULT 0,
+       PRIMARY KEY (identifier, date)
+    )`
+  );
+
+  // Daily Tool Usage (Tool Frequency)
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS daily_tool_usage (
+       identifier TEXT,
+       date TEXT,
+       tool_id TEXT,
+       usage_count INTEGER DEFAULT 0,
+       PRIMARY KEY (identifier, date, tool_id)
+    )`
+  );
+  
+  db.exec("CREATE INDEX IF NOT EXISTS idx_usage_type ON usage_stats(identifier_type)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_daily_date ON daily_usage_stats(date)");
+
+  // --- Migration: Merge old token_stats.db if exists ---
+  try {
+    const oldStatsPath = path.join(process.cwd(), "token_stats.db");
+    if (fs.existsSync(oldStatsPath)) {
+        console.log("Found legacy token_stats.db, attempting migration...");
+        
+        // Attach the old database
+        db.exec(`ATTACH DATABASE '${oldStatsPath.replace(/'/g, "''")}' AS old_stats`);
+        
+        try {
+            // 1. Migrate usage_stats
+            db.exec(`
+                INSERT OR IGNORE INTO main.usage_stats 
+                (identifier, identifier_type, total_tokens, input_tokens, output_tokens, cache_hit_tokens, cache_miss_tokens, last_updated)
+                SELECT identifier, identifier_type, total_tokens, input_tokens, output_tokens, cache_hit_tokens, cache_miss_tokens, last_updated
+                FROM old_stats.usage_stats
+            `);
+            
+            // 2. Migrate daily_usage_stats
+            db.exec(`
+                INSERT OR IGNORE INTO main.daily_usage_stats
+                (identifier, date, total_tokens, input_tokens, output_tokens, message_count, word_count)
+                SELECT identifier, date, total_tokens, input_tokens, output_tokens, message_count, word_count
+                FROM old_stats.daily_usage_stats
+            `);
+
+            // 3. Migrate daily_tool_usage
+            db.exec(`
+                INSERT OR IGNORE INTO main.daily_tool_usage
+                (identifier, date, tool_id, usage_count)
+                SELECT identifier, date, tool_id, usage_count
+                FROM old_stats.daily_tool_usage
+            `);
+            
+            console.log("Migration from token_stats.db completed successfully.");
+            
+            // Detach first
+            db.exec("DETACH DATABASE old_stats");
+
+            // Rename old file to mark as migrated
+            const migratedPath = oldStatsPath + ".migrated";
+            fs.renameSync(oldStatsPath, migratedPath);
+            console.log(`Renamed token_stats.db to ${path.basename(migratedPath)}`);
+
+        } catch (migrationErr) {
+            console.error("Error during data copy from token_stats.db:", migrationErr);
+            // Ensure we detach even if migration fails
+            try { db.exec("DETACH DATABASE old_stats"); } catch(e) {}
+        }
+    }
+  } catch (e) {
+      console.error("Migration check failed:", e);
+  }
+
+
 
   // New Table: Verification Codes
   db.exec(
@@ -107,12 +253,22 @@ const initializeSchema = (db: DatabaseInstance) => {
        created_at TEXT NOT NULL
      )`
   );
+
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS login_attempts (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       email TEXT NOT NULL,
+       success INTEGER NOT NULL,
+       created_at TEXT NOT NULL
+     )`
+  );
   
   // Optimize: Add indices for performance
   db.exec("CREATE INDEX IF NOT EXISTS idx_conversations_updated_at ON conversations(updated_at DESC)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON messages(conversation_id)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_verification_codes_email ON verification_codes(email)");
+  db.exec("CREATE INDEX IF NOT EXISTS idx_login_attempts_email ON login_attempts(email)");
 
   // New Table: User Stats (Token Usage)
   db.exec(
@@ -150,6 +306,20 @@ const initializeSchema = (db: DatabaseInstance) => {
   
   db.exec("CREATE INDEX IF NOT EXISTS idx_analytics_events_type ON analytics_events(event_type)");
   db.exec("CREATE INDEX IF NOT EXISTS idx_analytics_events_user ON analytics_events(user_id)");
+
+  // New Table: Assessments History
+  db.exec(
+    `CREATE TABLE IF NOT EXISTS assessments (
+       id INTEGER PRIMARY KEY AUTOINCREMENT,
+       user_id INTEGER NOT NULL,
+       type TEXT NOT NULL, 
+       title TEXT,
+       result TEXT NOT NULL,
+       metadata TEXT,
+       created_at TEXT NOT NULL
+    )`
+  );
+  db.exec("CREATE INDEX IF NOT EXISTS idx_assessments_user ON assessments(user_id)");
 
   // Check if conversation_id column exists in messages table
   try {
@@ -198,6 +368,37 @@ const initializeSchema = (db: DatabaseInstance) => {
     console.error("Schema migration error (conversations user_id):", e);
   }
 
+  try {
+    const columns = db.prepare("PRAGMA table_info(conversations)").all() as any[];
+    const hasShortCode = columns.some(col => col.name === "short_code");
+    if (!hasShortCode) {
+      db.exec("ALTER TABLE conversations ADD COLUMN short_code TEXT");
+    }
+    db.exec("CREATE UNIQUE INDEX IF NOT EXISTS idx_conversations_short_code ON conversations(short_code)");
+    const rows = db.prepare("SELECT id FROM conversations WHERE short_code IS NULL OR short_code = ''").all() as { id: string }[];
+    const updateStmt = db.prepare("UPDATE conversations SET short_code = ? WHERE id = ?");
+    rows.forEach((row) => {
+      updateStmt.run(generateUniqueShortCode(db), row.id);
+    });
+  } catch (e) {
+    console.error("Schema migration error (conversations short_code):", e);
+  }
+
+  // Check if cache columns exist in user_stats table
+  try {
+    const columns = db.prepare("PRAGMA table_info(user_stats)").all() as any[];
+    const hasCacheHit = columns.some(col => col.name === "cache_hit_tokens");
+    if (!hasCacheHit) {
+      db.exec("ALTER TABLE user_stats ADD COLUMN cache_hit_tokens INTEGER DEFAULT 0");
+    }
+    const hasCacheMiss = columns.some(col => col.name === "cache_miss_tokens");
+    if (!hasCacheMiss) {
+      db.exec("ALTER TABLE user_stats ADD COLUMN cache_miss_tokens INTEGER DEFAULT 0");
+    }
+  } catch (e) {
+    console.error("Schema migration error (user_stats cache):", e);
+  }
+
   // Check if kind and metadata columns exist in messages table
   try {
     const columns = db.prepare("PRAGMA table_info(messages)").all() as any[];
@@ -222,8 +423,9 @@ export const createConversation = (id: string, title: string, toolId: string | n
   const exists = db.prepare("SELECT 1 FROM conversations WHERE id = ?").get(id);
   if (!exists) {
     const now = new Date().toISOString();
-    const stmt = db.prepare("INSERT INTO conversations (id, title, created_at, updated_at, tool_id, user_id) VALUES (?, ?, ?, ?, ?, ?)");
-    stmt.run(id, title, now, now, toolId, userId);
+    const shortCode = generateUniqueShortCode(db);
+    const stmt = db.prepare("INSERT INTO conversations (id, title, created_at, updated_at, tool_id, user_id, short_code) VALUES (?, ?, ?, ?, ?, ?, ?)");
+    stmt.run(id, title, now, now, toolId, userId, shortCode);
   }
 };
 
@@ -244,7 +446,7 @@ export const updateConversationTool = (id: string, toolId: string | null) => {
 export const getConversationsFromDb = (userId: number | null = null) => {
   const db = getDb();
   // Sort by updated_at DESC (recently active first)
-  let sql = "SELECT id, title, created_at, updated_at, tool_id FROM conversations";
+  let sql = "SELECT id, short_code, title, created_at, updated_at, tool_id FROM conversations";
   const params: any[] = [];
 
   if (userId) {
@@ -257,12 +459,24 @@ export const getConversationsFromDb = (userId: number | null = null) => {
   sql += " ORDER BY updated_at DESC LIMIT 50";
   
   const stmt = db.prepare(sql);
-  return stmt.all(...params) as { id: string; title: string; created_at: string; updated_at: string; tool_id: string | null }[];
+  return stmt.all(...params) as { id: string; short_code?: string | null; title: string; created_at: string; updated_at: string; tool_id: string | null }[];
 };
 
 export const getConversationById = (id: string) => {
   const db = getDb();
-  return db.prepare("SELECT * FROM conversations WHERE id = ?").get(id) as { id: string; user_id: number | null; title: string } | undefined;
+  return db.prepare("SELECT * FROM conversations WHERE id = ?").get(id) as { id: string; short_code?: string | null; user_id: number | null; title: string } | undefined;
+};
+
+export const getConversationByShortCode = (shortCode: string) => {
+  const db = getDb();
+  return db.prepare("SELECT * FROM conversations WHERE short_code = ?").get(shortCode) as { id: string; short_code?: string | null; user_id: number | null; title: string } | undefined;
+};
+
+export const resolveConversationId = (value: string) => {
+  const byId = getConversationById(value);
+  if (byId) return byId.id;
+  const byShort = getConversationByShortCode(value);
+  return byShort?.id || null;
 };
 
 export const saveVerificationCode = (email: string, code: string) => {
@@ -275,6 +489,37 @@ export const saveVerificationCode = (email: string, code: string) => {
   ).run(email, code, expiresAt, createdAt);
 };
 
+export const getRecentVerificationCodeCount = (email: string, windowMs: number) => {
+  const db = getDb();
+  const since = new Date(Date.now() - windowMs).toISOString();
+  const result = db.prepare(
+    "SELECT COUNT(1) as count FROM verification_codes WHERE email = ? AND created_at >= ?"
+  ).get(email, since) as { count: number } | undefined;
+  return result?.count || 0;
+};
+
+export const recordLoginAttempt = (email: string, success: boolean) => {
+  const db = getDb();
+  const createdAt = new Date().toISOString();
+  db.prepare(
+    "INSERT INTO login_attempts (email, success, created_at) VALUES (?, ?, ?)"
+  ).run(email, success ? 1 : 0, createdAt);
+};
+
+export const getRecentLoginFailureCount = (email: string, windowMs: number) => {
+  const db = getDb();
+  const since = new Date(Date.now() - windowMs).toISOString();
+  const result = db.prepare(
+    "SELECT COUNT(1) as count FROM login_attempts WHERE email = ? AND success = 0 AND created_at >= ?"
+  ).get(email, since) as { count: number } | undefined;
+  return result?.count || 0;
+};
+
+export const clearLoginAttempts = (email: string) => {
+  const db = getDb();
+  db.prepare("DELETE FROM login_attempts WHERE email = ?").run(email);
+};
+
 export const verifyCode = (email: string, code: string): boolean => {
   const db = getDb();
   const now = new Date().toISOString();
@@ -285,8 +530,7 @@ export const verifyCode = (email: string, code: string): boolean => {
   ).get(email, code, now) as any;
   
   if (record) {
-    // Delete used code (optional, or just rely on expiration)
-    // db.prepare("DELETE FROM verification_codes WHERE id = ?").run(record.id);
+    db.prepare("DELETE FROM verification_codes WHERE id = ?").run(record.id);
     return true;
   }
   return false;
@@ -331,6 +575,66 @@ export const createUserWithPassword = (email: string, passwordHash: string, name
 export const getUserByEmail = (email: string): User | undefined => {
   const db = getDb();
   return db.prepare("SELECT * FROM users WHERE email = ?").get(email) as User | undefined;
+};
+
+export const listUsersForAdmin = () => {
+  const db = getDb();
+  const rows = db.prepare(`
+    SELECT 
+      u.id,
+      u.email,
+      u.name,
+      u.avatar,
+      u.created_at,
+      u.role,
+      u.password_hash,
+      (SELECT COUNT(1) FROM conversations WHERE user_id = u.id) as conversations_count,
+      (SELECT COUNT(1) FROM assessments WHERE user_id = u.id) as assessments_count
+    FROM users u
+    ORDER BY u.created_at DESC
+  `).all() as any[];
+
+  return rows.map(row => ({
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    avatar: row.avatar,
+    created_at: row.created_at,
+    role: row.role,
+    hasPassword: !!row.password_hash,
+    conversationsCount: row.conversations_count || 0,
+    assessmentsCount: row.assessments_count || 0
+  }));
+};
+
+export const clearUserPasswordById = (userId: number) => {
+  const db = getDb();
+  const result = db.prepare("UPDATE users SET password_hash = NULL WHERE id = ?").run(userId);
+  return result.changes;
+};
+
+export const deleteUserById = (userId: number) => {
+  const db = getDb();
+  const tx = db.transaction((targetUserId: number) => {
+    const conversationIds = db.prepare("SELECT id FROM conversations WHERE user_id = ?").all(targetUserId) as { id: string }[];
+    if (conversationIds.length > 0) {
+      const ids = conversationIds.map(row => row.id);
+      const placeholders = ids.map(() => "?").join(",");
+      db.prepare(`DELETE FROM messages WHERE conversation_id IN (${placeholders})`).run(...ids);
+      db.prepare(`DELETE FROM conversations WHERE id IN (${placeholders})`).run(...ids);
+    }
+
+    db.prepare("DELETE FROM assessments WHERE user_id = ?").run(targetUserId);
+    db.prepare("DELETE FROM analytics_events WHERE user_id = ?").run(targetUserId);
+    db.prepare("DELETE FROM tool_usage WHERE user_id = ?").run(targetUserId);
+    db.prepare("DELETE FROM user_stats WHERE user_id = ?").run(targetUserId);
+    db.prepare("DELETE FROM login_attempts WHERE email IN (SELECT email FROM users WHERE id = ?)").run(targetUserId);
+    db.prepare("DELETE FROM verification_codes WHERE email IN (SELECT email FROM users WHERE id = ?)").run(targetUserId);
+    const userResult = db.prepare("DELETE FROM users WHERE id = ?").run(targetUserId);
+    return userResult.changes;
+  });
+
+  return tx(userId);
 };
 
 export const updateUserPassword = (userId: number, passwordHash: string) => {
@@ -511,7 +815,14 @@ export const saveUserProfileToDb = (profile: UserProfile) => {
 };
 
 // Helper to increment user token usage
-export const incrementUserTokens = (userId: number, total: number, input: number, output: number) => {
+export const incrementUserTokens = (
+  userId: number, 
+  total: number, 
+  input: number, 
+  output: number,
+  cacheHit: number = 0,
+  cacheMiss: number = 0
+) => {
   const db = getDb();
   const now = new Date().toISOString();
   
@@ -524,16 +835,26 @@ export const incrementUserTokens = (userId: number, total: number, input: number
       SET total_tokens = total_tokens + ?, 
           input_tokens = input_tokens + ?, 
           output_tokens = output_tokens + ?, 
+          cache_hit_tokens = cache_hit_tokens + ?,
+          cache_miss_tokens = cache_miss_tokens + ?,
           last_updated = ? 
       WHERE user_id = ?
     `);
-    stmt.run(total, input, output, now, userId);
+    stmt.run(total, input, output, cacheHit, cacheMiss, now, userId);
   } else {
     const stmt = db.prepare(`
-      INSERT INTO user_stats (user_id, total_tokens, input_tokens, output_tokens, last_updated) 
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO user_stats (
+        user_id, 
+        total_tokens, 
+        input_tokens, 
+        output_tokens, 
+        cache_hit_tokens,
+        cache_miss_tokens,
+        last_updated
+      ) 
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
-    stmt.run(userId, total, input, output, now);
+    stmt.run(userId, total, input, output, cacheHit, cacheMiss, now);
   }
 };
 

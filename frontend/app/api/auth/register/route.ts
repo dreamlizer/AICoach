@@ -1,10 +1,7 @@
 import { NextResponse } from "next/server";
 import { verifyCode, createUserWithPassword, getUserByEmail } from "@/lib/db";
-import jwt from "jsonwebtoken";
-import { serialize } from "cookie";
+import { createAuthCookie, validatePassword } from "@/lib/session";
 import bcrypt from "bcryptjs";
-
-const JWT_SECRET = process.env.JWT_SECRET || "default-secret";
 
 export async function POST(request: Request) {
   try {
@@ -12,6 +9,11 @@ export async function POST(request: Request) {
 
     if (!email || !code || !password || !name) {
       return NextResponse.json({ error: "所有字段都必须填写" }, { status: 400 });
+    }
+
+    const passwordError = validatePassword(password);
+    if (passwordError) {
+      return NextResponse.json({ error: passwordError }, { status: 400 });
     }
 
     // Verify Code
@@ -26,27 +28,11 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "该邮箱已被注册" }, { status: 400 });
     }
 
-    // Hash Password
     const passwordHash = await bcrypt.hash(password, 10);
 
-    // Create User
     const user = createUserWithPassword(email, passwordHash, name) as any;
 
-    // Generate JWT
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    // Set Cookie
-    const cookie = serialize("auth_token", token, {
-      httpOnly: true,
-      secure: false, // process.env.NODE_ENV === "production", // Modified for compatibility
-      maxAge: 60 * 60 * 24 * 7, // 7 days
-      path: "/",
-      sameSite: "lax", // Modified from strict to lax
-    });
+    const cookie = createAuthCookie(user);
 
     const response = NextResponse.json({ success: true, user });
     response.headers.set("Set-Cookie", cookie);
