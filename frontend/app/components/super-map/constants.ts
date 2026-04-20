@@ -20,11 +20,11 @@ export const MAX_MAP_ZOOM = 5;
 export const DEFAULT_STATE: PersistedState = {
   selectedNames: [],
   labelLanguage: "zh",
-  highlightColor: "#F59E0B",
-  baseColor: "#C7CCD4",
+  highlightColor: "#D77A9A",
+  baseColor: "#D9D5DC",
   borderColor: "#FFFFFF",
-  hoverColor: "#FDBA74",
-  fontColor: "#0F172A",
+  hoverColor: "#F1C7D5",
+  fontColor: "#2B1D27",
   fontSize: 11,
   fontWeight: 600,
   fontFamily: '"PingFang SC","Microsoft YaHei","Noto Sans SC",sans-serif',
@@ -55,7 +55,7 @@ export const FONT_FAMILIES: FontFamilyOption[] = [
   { label: "苹方", value: '"PingFang SC","Helvetica Neue",sans-serif' }
 ];
 
-export const FONT_COLOR_SWATCHES = ["#0F172A", "#1E3A8A", "#334155", "#065F46", "#7C2D12", "#111827"];
+export const FONT_COLOR_SWATCHES = ["#2B1D27", "#6D4F96", "#7B394E", "#526748", "#B75D3C", "#334155"];
 
 export const REGION_EN_MAP: Record<string, string> = {
   北京: "Beijing",

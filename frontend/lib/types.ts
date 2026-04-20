@@ -84,5 +84,9 @@ export type ExecutiveTool = {
     introduction: string;
     usage: string;
     outcome: string;
+    sections?: Array<{
+      heading: string;
+      content: string;
+    }>;
   };
 };

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="gTop" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ff6a6a"/>
+      <stop offset="100%" stop-color="#d7263d"/>
+    </linearGradient>
+    <linearGradient id="gBottom" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fafafa"/>
+      <stop offset="100%" stop-color="#d6d6d6"/>
+    </linearGradient>
+  </defs>
+  <circle cx="32" cy="32" r="30" fill="#111"/>
+  <clipPath id="clipBall"><circle cx="32" cy="32" r="28"/></clipPath>
+  <g clip-path="url(#clipBall)">
+    <rect x="4" y="4" width="56" height="28" fill="url(#gTop)"/>
+    <rect x="4" y="32" width="56" height="28" fill="url(#gBottom)"/>
+    <rect x="4" y="29.5" width="56" height="5" fill="#151515"/>
+  </g>
+  <circle cx="32" cy="32" r="9.5" fill="#f4f4f4" stroke="#161616" stroke-width="4"/>
+  <circle cx="32" cy="32" r="3.3" fill="#d9d9d9"/>
+  <ellipse cx="23" cy="19" rx="10" ry="6" fill="#fff" opacity=".22"/>
+</svg>

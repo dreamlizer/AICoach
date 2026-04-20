@@ -1,32 +1,35 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { verifyCode, getUserByEmail } from "@/lib/db";
 import { checkLoginRateLimit, handleLoginSuccess, handleLoginFailure } from "@/lib/auth-helpers";
+import { isAuthSecretMissingError } from "@/lib/session";
 
 export async function POST(request: Request) {
   try {
     const { email, code } = await request.json();
 
     if (!email || !code) {
-      return NextResponse.json({ error: "邮箱和验证码不能为空" }, { status: 400 });
+      return NextResponse.json({ error: "Email and verification code are required" }, { status: 400 });
     }
 
-    const rateLimitError = checkLoginRateLimit(email);
+    const rateLimitError = await checkLoginRateLimit(email);
     if (rateLimitError) return rateLimitError;
 
-    const isValid = verifyCode(email, code);
+    const isValid = await verifyCode(email, code);
     if (!isValid) {
-      return handleLoginFailure(email, "邮箱或验证码错误");
+      return handleLoginFailure(email, "Email or verification code is incorrect");
     }
 
-    const user = getUserByEmail(email) as any;
-    
+    const user = await getUserByEmail(email);
     if (!user) {
-      return handleLoginFailure(email, "邮箱或验证码错误");
+      return handleLoginFailure(email, "Email or verification code is incorrect");
     }
 
     return handleLoginSuccess(user);
   } catch (error) {
     console.error("Login Error:", error);
-    return NextResponse.json({ error: "登录失败" }, { status: 500 });
+    if (isAuthSecretMissingError(error)) {
+      return NextResponse.json({ error: "Login service misconfigured: missing AUTH_JWT_SECRET" }, { status: 500 });
+    }
+    return NextResponse.json({ error: "Login failed" }, { status: 500 });
   }
 }

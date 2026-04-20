@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+﻿import { NextResponse } from "next/server";
+import { getUserById, updateUserPassword } from "@/lib/db";
 import { getCurrentUser, validatePassword } from "@/lib/session";
 import bcrypt from "bcryptjs";
 
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const { oldPassword, newPassword } = await request.json();
 
     if (!oldPassword || !newPassword) {
-      return NextResponse.json({ error: "原密码和新密码不能为空" }, { status: 400 });
+      return NextResponse.json({ error: "Old password and new password are required" }, { status: 400 });
     }
 
     const passwordError = validatePassword(newPassword);
@@ -16,31 +16,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: passwordError }, { status: 400 });
     }
 
-    const user = getCurrentUser();
+    const user = await getCurrentUser();
     if (!user) {
-      return NextResponse.json({ error: "未登录" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const db = getDb();
-    const userRecord = db.prepare("SELECT password_hash FROM users WHERE id = ?").get(user.id) as any;
+    const userRecord = await getUserById(user.id);
 
     if (!userRecord || !userRecord.password_hash) {
-       return NextResponse.json({ error: "当前用户未设置密码" }, { status: 400 });
+      return NextResponse.json({ error: "Current user has no password set" }, { status: 400 });
     }
 
     const isMatch = await bcrypt.compare(oldPassword, userRecord.password_hash);
     if (!isMatch) {
-      return NextResponse.json({ error: "原密码错误" }, { status: 400 });
+      return NextResponse.json({ error: "Old password is incorrect" }, { status: 400 });
     }
 
-    const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash(newPassword, salt);
-
-    db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashedPassword, user.id);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    await updateUserPassword(user.id, hashedPassword);
 
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Update Password Error:", error);
-    return NextResponse.json({ error: "修改密码失败" }, { status: 500 });
+    return NextResponse.json({ error: "Failed to update password" }, { status: 500 });
   }
 }
+

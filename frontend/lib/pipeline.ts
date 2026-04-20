@@ -1,4 +1,4 @@
-import OpenAI from "openai";
+﻿import OpenAI from "openai";
 import { 
   STAGE1_PROMPT,
   STAGE3_PROMPT,
@@ -145,11 +145,11 @@ async function callAIModel(
 }
 
 // Stage 2: Memory Retrieval
-export function getRecentHistory(conversationId: string): string {
+export async function getRecentHistory(conversationId: string): Promise<string> {
   try {
     // Reverted to Local History Mode: Fetch last 20 messages from CURRENT conversation only
     // User requested to disable global cross-conversation context for now.
-    const messages = getMessagesFromDb(conversationId, 20); 
+    const messages = await getMessagesFromDb(conversationId, 20); 
     
     if (messages.length === 0) return "";
     
@@ -203,8 +203,8 @@ Do NOT output the final reply yet. Only the strategy.
     prompt = STAGE3_PROMPT
       .replace("{user_input}", userInput)
       .replace("{intent_json}", JSON.stringify(analysis))
-      .replace("{history_context}", history || "无历史记录")
-      .replace("{user_profile}", "暂无画像数据");
+      .replace("{history_context}", history || "No history")
+      .replace("{user_profile}", "No profile data");
   }
 
   try {
@@ -285,7 +285,7 @@ Generate the response to the user.
     return { reply: result.content || "回复生成失败", usage: result.usage };
   } catch (error) {
     console.error("Stage 4 Reply Error:", error);
-    return { reply: "抱歉，我暂时无法生成回复。" };
+    return { reply: "Sorry, I cannot generate a reply right now." };
   }
 }
 
@@ -333,9 +333,10 @@ export async function generateTitle(userMessage: string, aiReply: string, config
     // Use STAGE1 settings (usually faster/cheaper model) for this simple task
     const { modelProvider, apiKey, modelName, reasoningEffort } = config.stage1;
     const title = await callAIModel(modelProvider, apiKey, prompt, modelName, "New Chat", reasoningEffort);
-    return title.content.replace(/["《》]/g, "").trim().slice(0, 15);
+    return title.content.replace(/["'`]/g, "").trim().slice(0, 15);
   } catch (e) {
     console.error("Title Generation Failed:", e);
     return "";
   }
 }
+

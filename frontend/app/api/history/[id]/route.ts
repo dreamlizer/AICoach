@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿﻿﻿﻿﻿﻿import { NextResponse } from "next/server";
 import { getMessagesFromDb, deleteConversation, getConversationById, resolveConversationId } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 
@@ -6,20 +6,20 @@ export const dynamic = "force-dynamic";
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const conversationId = resolveConversationId(params.id) || params.id;
-  
-  // Check ownership
-  const user = getCurrentUser();
-  const conversation = getConversationById(conversationId);
-  
+  const { id } = await params;
+  const conversationId = (await resolveConversationId(id)) || id;
+
+  const user = await getCurrentUser();
+  const conversation = await getConversationById(conversationId);
+
   if (conversation && conversation.user_id && (!user || user.id !== conversation.user_id)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
   try {
-    deleteConversation(conversationId);
+    await deleteConversation(conversationId);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error("Failed to delete conversation:", error);
@@ -29,24 +29,22 @@ export async function DELETE(
 
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
-  const conversationId = resolveConversationId(params.id) || params.id;
-  
-  // Check ownership
-  const user = getCurrentUser();
-  const conversation = getConversationById(conversationId);
-  
+  const { id } = await params;
+  const conversationId = (await resolveConversationId(id)) || id;
+
+  const user = await getCurrentUser();
+  const conversation = await getConversationById(conversationId);
+
   if (conversation && conversation.user_id && (!user || user.id !== conversation.user_id)) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
   try {
-    // 100 is a reasonable limit for now to load full history of a session
-    const rawMessages = getMessagesFromDb(conversationId, 100); 
-    
-    // Map DB format to UI format: Parse metadata string -> debugInfo object
-    const messages = rawMessages.map(msg => {
+    const rawMessages = await getMessagesFromDb(conversationId, 100);
+
+    const messages = rawMessages.map((msg) => {
       let debugInfo = undefined;
       if (msg.metadata) {
         try {
@@ -57,13 +55,14 @@ export async function GET(
       }
       return {
         ...msg,
-        debugInfo
+        debugInfo,
       };
     });
-    
+
     return NextResponse.json(messages);
   } catch (error) {
     console.error("Failed to fetch history details:", error);
     return NextResponse.json({ error: "Failed to fetch history" }, { status: 500 });
   }
 }
+

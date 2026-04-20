@@ -2,14 +2,14 @@
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { ModelProvider } from '@/lib/stage_settings';
+import { defaultSitePaletteId, getSitePalette, SitePaletteId } from '@/lib/site_palette';
 
-type Theme = 'light' | 'dark' | 'auto';
 type FontSize = 'default' | 'medium' | 'large';
 type PartnerStyle = 'rational' | 'empathetic';
 
 interface PreferencesContextType {
-  theme: Theme;
-  setTheme: (theme: Theme) => void;
+  sitePalette: SitePaletteId;
+  setSitePalette: (palette: SitePaletteId) => void;
   fontSize: FontSize;
   setFontSize: (size: FontSize) => void;
   partnerStyle: PartnerStyle;
@@ -21,7 +21,7 @@ interface PreferencesContextType {
 const PreferencesContext = createContext<PreferencesContextType | undefined>(undefined);
 
 export function PreferencesProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>('auto');
+  const [sitePalette, setSitePaletteState] = useState<SitePaletteId>(defaultSitePaletteId);
   const [fontSize, setFontSize] = useState<FontSize>('default');
   const [partnerStyle, setPartnerStyleState] = useState<PartnerStyle>('empathetic');
   const [modelProvider, setModelProviderState] = useState<ModelProvider>('doubao');
@@ -33,9 +33,21 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     }
   }, []);
 
+  useEffect(() => {
+    const savedPalette = localStorage.getItem("site-palette") as SitePaletteId | null;
+    if (savedPalette) {
+      setSitePaletteState(savedPalette);
+    }
+  }, []);
+
   const setModelProvider = (provider: ModelProvider) => {
     setModelProviderState(provider);
     localStorage.setItem("app-model-provider", provider);
+  };
+
+  const setSitePalette = (palette: SitePaletteId) => {
+    setSitePaletteState(palette);
+    localStorage.setItem("site-palette", palette);
   };
 
   const setPartnerStyle = (style: PartnerStyle) => {
@@ -44,34 +56,6 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     setModelProviderState(nextProvider);
     localStorage.setItem("app-model-provider", nextProvider);
   };
-
-  // Effect for Theme
-  useEffect(() => {
-    const root = window.document.documentElement;
-    root.classList.remove('light', 'dark');
-
-    if (theme === 'auto') {
-      const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
-      
-      const applySystemTheme = () => {
-        const systemTheme = mediaQuery.matches ? 'dark' : 'light';
-        root.classList.remove('light', 'dark');
-        root.classList.add(systemTheme);
-        root.style.colorScheme = systemTheme;
-      };
-
-      // Apply initially
-      applySystemTheme();
-
-      // Listen for changes
-      mediaQuery.addEventListener('change', applySystemTheme);
-      
-      return () => mediaQuery.removeEventListener('change', applySystemTheme);
-    } else {
-      root.classList.add(theme);
-      root.style.colorScheme = theme;
-    }
-  }, [theme]);
 
   useEffect(() => {
     const root = window.document.documentElement;
@@ -89,11 +73,23 @@ export function PreferencesProvider({ children }: { children: React.ReactNode })
     }
   }, [fontSize]);
 
+  useEffect(() => {
+    const root = window.document.documentElement;
+    const palette = getSitePalette(sitePalette);
+    Object.entries(palette.vars).forEach(([key, value]) => {
+      root.style.setProperty(key, value);
+    });
+    root.dataset.sitePalette = palette.id;
+    root.classList.remove('dark');
+    root.classList.add('light');
+    root.style.colorScheme = palette.isDark ? 'dark' : 'light';
+  }, [sitePalette]);
+
   return (
     <PreferencesContext.Provider
       value={{
-        theme,
-        setTheme,
+        sitePalette,
+        setSitePalette,
         fontSize,
         setFontSize,
         partnerStyle,

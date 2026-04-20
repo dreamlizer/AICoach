@@ -359,8 +359,8 @@ export const AssessmentModalTemplate: React.FC<AssessmentModalTemplateProps> = (
   icon,
   onClose,
   children,
-  headerColorClass = "text-blue-600",
-  iconBgClass = "bg-blue-600",
+  headerColorClass = "text-[var(--site-accent-strong)]",
+  iconBgClass = "bg-[var(--site-accent)]",
   maxWidthClass = "max-w-5xl",
 }) => {
   return (
@@ -369,10 +369,10 @@ export const AssessmentModalTemplate: React.FC<AssessmentModalTemplateProps> = (
         initial={{ opacity: 0, scale: 0.95 }}
         animate={{ opacity: 1, scale: 1 }}
         exit={{ opacity: 0, scale: 0.95 }}
-        className={`bg-white dark:bg-zinc-900 w-full ${maxWidthClass} h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-zinc-200 dark:border-zinc-800`}
+        className={`bg-[var(--site-panel-strong)] w-full ${maxWidthClass} h-[90vh] rounded-2xl shadow-2xl overflow-hidden flex flex-col border border-[var(--site-border)]`}
       >
         {/* Header */}
-        <div className="h-16 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between px-6 bg-zinc-50/50 dark:bg-zinc-900/50">
+        <div className="h-16 border-b border-[var(--site-border)] flex items-center justify-between px-6 bg-[var(--site-bg-soft)]">
           <div className="flex items-center gap-3">
             <div className={`w-8 h-8 rounded-lg ${iconBgClass} flex items-center justify-center`}>
               {icon}
@@ -383,14 +383,14 @@ export const AssessmentModalTemplate: React.FC<AssessmentModalTemplateProps> = (
           </div>
           <button 
             onClick={onClose}
-            className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-800 rounded-full transition-colors"
+            className="p-2 hover:bg-[var(--site-accent-soft)] rounded-full transition-colors"
           >
-            <X className="w-5 h-5 text-zinc-500" />
+            <X className="w-5 h-5 text-[var(--site-text-soft)]" />
           </button>
         </div>
 
         {/* Content Area */}
-        <div className="flex-1 overflow-y-auto relative bg-[#FDFBF7] custom-scrollbar">
+        <div className="flex-1 overflow-y-auto relative bg-[var(--site-panel-strong)] custom-scrollbar">
           {children}
         </div>
       </motion.div>
@@ -770,7 +770,7 @@ export const ReportCardTemplate: React.FC<ReportCardTemplateProps> = ({
                   <div data-report-header-icon className="w-8 h-8 bg-[#C5A059] rounded flex items-center justify-center text-[#151E32] shadow-lg shadow-[#C5A059]/20">
                       {toolIcon}
                   </div>
-                  <span className="text-[#C5A059] font-medium tracking-widest text-xs uppercase">Executive Insider</span>
+                  <span className="text-[#C5A059] font-medium tracking-widest text-xs uppercase">Dream Lab</span>
               </div>
 
               <div data-report-title style={{ paddingBottom: '12px' }}>
@@ -849,8 +849,8 @@ export const ReportCardTemplate: React.FC<ReportCardTemplateProps> = ({
 
       {/* Footer */}
       <div className="bg-[#151E32] px-8 py-6 border-t border-white/5 flex flex-col items-center justify-center gap-2 mt-auto">
-           <div className="text-[10px] text-[#C5A059] font-light tracking-[0.2em] uppercase opacity-60">Powered by Dreamlizer</div>
-           <div className="text-[10px] text-blue-200/30 tracking-wider">Executive Insider · {toolName}</div>
+           <div className="text-[10px] text-[#C5A059] font-light tracking-[0.2em] uppercase opacity-60">Powered by Dream Lab</div>
+           <div className="text-[10px] text-blue-200/30 tracking-wider">Dream Lab · {toolName}</div>
       </div>
     </div>
   );
@@ -885,16 +885,6 @@ export const AssessmentProfileForm: React.FC<AssessmentProfileFormProps> = ({
   themeColor = "blue",
   modelSelector
 }) => {
-  // Theme helpers
-  const isBlue = themeColor === "blue";
-  const bgLight = isBlue ? "bg-blue-50" : "bg-indigo-50";
-  const borderLight = isBlue ? "border-blue-100" : "border-indigo-100";
-  const textDark = isBlue ? "text-blue-800" : "text-indigo-800";
-  const focusRing = isBlue ? "focus:ring-blue-500" : "focus:ring-indigo-500";
-  const btnActive = isBlue ? "bg-blue-600 text-white border-blue-600 shadow-md" : "bg-indigo-600 text-white border-indigo-600 shadow-md";
-  const btnInactive = isBlue ? "hover:border-blue-300 hover:bg-blue-50" : "hover:border-indigo-300 hover:bg-indigo-50";
-  const btnGradient = isBlue ? "bg-gradient-to-r from-blue-600 to-indigo-700 hover:shadow-blue-500/30" : "bg-gradient-to-r from-indigo-600 to-violet-700 hover:shadow-indigo-500/30";
-
   return (
     <div className="h-full min-h-0 flex flex-col items-center justify-start p-6 max-w-md mx-auto overflow-y-auto">
       <div className="text-center mb-4">
@@ -903,7 +893,7 @@ export const AssessmentProfileForm: React.FC<AssessmentProfileFormProps> = ({
       </div>
       
       <div className="w-full space-y-3 relative">
-        <div className={`${bgLight} ${borderLight} border rounded-lg p-3 mb-4 text-[0.8125rem] leading-snug ${textDark} flex items-start gap-1`}>
+        <div className="mb-4 flex items-start gap-1 rounded-lg border border-[var(--site-border)] bg-[var(--site-bg-soft)] p-3 text-[0.8125rem] leading-snug text-[var(--site-accent-strong)]">
           <div className="mt-0.5"><Briefcase className="w-3.5 h-3.5" /></div>
           <div>
             <span className="font-bold">重要提示：</span>
@@ -920,7 +910,7 @@ export const AssessmentProfileForm: React.FC<AssessmentProfileFormProps> = ({
                 type="text"
                 value={profile.nickname}
                 onChange={(e) => setProfile('nickname', e.target.value)}
-                className={`w-full pl-10 pr-4 py-1.5 text-[0.875rem] leading-snug border border-zinc-200 dark:border-zinc-700 rounded-lg focus:ring-2 ${focusRing} focus:border-transparent outline-none transition-all bg-white dark:bg-zinc-800`}
+                className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-10 pr-4 text-[0.875rem] leading-snug outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[var(--site-accent)]"
                 placeholder="例如：Alex、王总..."
               />
             </div>
@@ -941,8 +931,8 @@ export const AssessmentProfileForm: React.FC<AssessmentProfileFormProps> = ({
                           onClick={() => setProfile('level', lvl)}
                           className={`py-1.5 px-3 rounded-lg text-[0.8125rem] border transition-all ${
                               profile.level === lvl 
-                              ? btnActive
-                              : `bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 ${btnInactive}`
+                              ? "border-[var(--site-accent)] bg-[var(--site-accent)] text-white shadow-md"
+                              : "border-zinc-200 bg-white text-zinc-600 hover:border-[var(--site-border-strong)] hover:bg-[var(--site-bg-soft)]"
                           }`}
                       >
                           {lvl}
@@ -959,7 +949,7 @@ export const AssessmentProfileForm: React.FC<AssessmentProfileFormProps> = ({
                 type="text"
                 value={profile.role}
                 onChange={(e) => setProfile('role', e.target.value)}
-                className={`w-full pl-10 pr-4 py-1.5 text-[0.875rem] leading-snug border border-zinc-200 dark:border-zinc-700 rounded-lg focus:ring-2 ${focusRing} focus:border-transparent outline-none transition-all bg-white dark:bg-zinc-800`}
+                className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-10 pr-4 text-[0.875rem] leading-snug outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[var(--site-accent)]"
                 placeholder="例如：产品经理、人力资源总监..."
               />
             </div>
@@ -977,8 +967,8 @@ export const AssessmentProfileForm: React.FC<AssessmentProfileFormProps> = ({
                   onClick={() => setProfile("gender", item.value)}
                   className={`py-1.5 px-3 rounded-lg text-[0.8125rem] border transition-all ${
                     profile.gender === item.value
-                      ? btnActive
-                      : `bg-white dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 border-zinc-200 dark:border-zinc-700 ${btnInactive}`
+                      ? "border-[var(--site-accent)] bg-[var(--site-accent)] text-white shadow-md"
+                      : "border-zinc-200 bg-white text-zinc-600 hover:border-[var(--site-border-strong)] hover:bg-[var(--site-bg-soft)]"
                   }`}
                 >
                   {item.label}
@@ -995,7 +985,7 @@ export const AssessmentProfileForm: React.FC<AssessmentProfileFormProps> = ({
                 type="text"
                 value={profile.background}
                 onChange={(e) => setProfile('background', e.target.value)}
-                className={`w-full pl-10 pr-4 py-1.5 text-[0.875rem] leading-snug border border-zinc-200 dark:border-zinc-700 rounded-lg focus:ring-2 ${focusRing} focus:border-transparent outline-none transition-all bg-white dark:bg-zinc-800`}
+                className="w-full rounded-lg border border-zinc-200 bg-white py-1.5 pl-10 pr-4 text-[0.875rem] leading-snug outline-none transition-all focus:border-transparent focus:ring-2 focus:ring-[var(--site-accent)]"
                 placeholder="例如：互联网、制造业、金融..."
               />
             </div>
@@ -1007,7 +997,7 @@ export const AssessmentProfileForm: React.FC<AssessmentProfileFormProps> = ({
             className={`w-full py-2.5 rounded-xl font-semibold text-[0.875rem] text-white transition-all duration-300 transform hover:scale-[1.02] shadow-lg ${
               !profile.role || !profile.level || !profile.gender || !profile.background || !profile.nickname
                 ? 'bg-zinc-300 cursor-not-allowed'
-                : btnGradient
+                : 'bg-[var(--site-accent)] hover:bg-[var(--site-accent-strong)] hover:shadow-[0_12px_24px_rgba(184,95,131,0.22)]'
             }`}
           >
             开始生成模拟战

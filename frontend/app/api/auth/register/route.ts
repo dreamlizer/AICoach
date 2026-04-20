@@ -1,6 +1,7 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { verifyCode, createUserWithPassword, getUserByEmail } from "@/lib/db";
-import { createAuthCookie, validatePassword } from "@/lib/session";
+import { createAuthCookie, validatePassword, isAuthSecretMissingError } from "@/lib/session";
+import { sanitizeUser } from "@/lib/auth-helpers";
 import bcrypt from "bcryptjs";
 
 export async function POST(request: Request) {
@@ -8,7 +9,7 @@ export async function POST(request: Request) {
     const { email, code, password, name } = await request.json();
 
     if (!email || !code || !password || !name) {
-      return NextResponse.json({ error: "所有字段都必须填写" }, { status: 400 });
+      return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
 
     const passwordError = validatePassword(password);
@@ -16,30 +17,33 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: passwordError }, { status: 400 });
     }
 
-    // Verify Code
-    const isValid = verifyCode(email, code);
+    const isValid = await verifyCode(email, code);
     if (!isValid) {
-      return NextResponse.json({ error: "验证码无效或已过期" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid or expired verification code" }, { status: 400 });
     }
 
-    // Check if user already exists
-    const existingUser = getUserByEmail(email);
+    const existingUser = await getUserByEmail(email);
     if (existingUser) {
-        return NextResponse.json({ error: "该邮箱已被注册" }, { status: 400 });
+      return NextResponse.json({ error: "This email is already registered" }, { status: 400 });
     }
 
     const passwordHash = await bcrypt.hash(password, 10);
+    const user = await createUserWithPassword(email, passwordHash, name);
+    if (!user) {
+      return NextResponse.json({ error: "Failed to create user" }, { status: 500 });
+    }
 
-    const user = createUserWithPassword(email, passwordHash, name) as any;
+    const safeUser = sanitizeUser(user);
+    const cookie = createAuthCookie(safeUser);
 
-    const cookie = createAuthCookie(user);
-
-    const response = NextResponse.json({ success: true, user });
+    const response = NextResponse.json({ success: true, user: safeUser });
     response.headers.set("Set-Cookie", cookie);
-
     return response;
   } catch (error: any) {
     console.error("Register Error:", error);
-    return NextResponse.json({ error: error.message || "注册失败" }, { status: 500 });
+    if (isAuthSecretMissingError(error)) {
+      return NextResponse.json({ error: "Login service misconfigured: missing AUTH_JWT_SECRET" }, { status: 500 });
+    }
+    return NextResponse.json({ error: error?.message || "Registration failed" }, { status: 500 });
   }
 }

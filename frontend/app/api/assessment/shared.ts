@@ -1,5 +1,6 @@
 import OpenAI from "openai";
 import { COMMON_DEEPSEEK_KEY, COMMON_DOUBAO_KEY, ModelProvider } from "@/lib/stage_settings";
+import { loadServerEnv } from "@/lib/server/chat/env";
 
 export type ReasoningEffort = "low" | "medium" | "high" | "minimal" | null;
 
@@ -10,8 +11,9 @@ export async function createAssessmentStream(params: {
   deepseekModel: string;
   reasoningEffort?: ReasoningEffort;
 }) {
+  const keys = loadServerEnv();
   if (params.provider === "deepseek") {
-    const apiKey = process.env.DEEPSEEK_API_KEY || COMMON_DEEPSEEK_KEY;
+    const apiKey = keys.deepseek || COMMON_DEEPSEEK_KEY;
     if (!apiKey) throw new Error("DeepSeek API Key missing");
     const openai = new OpenAI({
       baseURL: "https://api.deepseek.com",
@@ -25,7 +27,7 @@ export async function createAssessmentStream(params: {
     });
   }
 
-  const apiKey = process.env.DOUBAO_API_KEY || COMMON_DOUBAO_KEY;
+  const apiKey = keys.doubao || COMMON_DOUBAO_KEY;
   if (!apiKey) throw new Error("Doubao API Key missing");
   const openai = new OpenAI({
     baseURL: "https://ark.cn-beijing.volces.com/api/v3",

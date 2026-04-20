@@ -24,3 +24,23 @@ bin/
 obj/
 .next/
 sqlite.db
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.tsbuildinfo
+
+# Project runtime / generated artifacts
+frontend/.next/
+frontend/.next-build/
+frontend/node_modules/
+frontend/sqlite.db
+frontend/dictionary-data.sqlite.db
+frontend/dictionary-data.sqlite.db-*
+frontend/dictionary-artifact.sqlite.db
+frontend/token_stats.db
+frontend/token_stats.db.*
+frontend/data/ecdict.csv
+frontend/*.tsbuildinfo
+frontend/coverage/
+frontend/.vercel/

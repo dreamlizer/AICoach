@@ -1,8 +1,8 @@
 "use client";
 
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
-import { X, ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, X } from "lucide-react";
 import { ExecutiveTool } from "@/lib/types";
 import { toolIconMap } from "@/app/components/Icons";
 
@@ -19,18 +19,21 @@ interface ToolHelpModalProps {
   onPrev?: () => void;
 }
 
-// Helper for text rendering with simple bold support (**text**) and newlines
 const renderText = (text: string | undefined) => {
   if (!text) return null;
-  return text.split('\n').map((line, i) => (
-    <React.Fragment key={i}>
-      {line.split(/(\*\*.*?\*\*)/g).map((part, j) => {
-        if (part.startsWith('**') && part.endsWith('**')) {
-          return <strong key={j} className="font-bold text-gray-900 dark:text-white">{part.slice(2, -2)}</strong>;
+  return text.split("\n").map((line, lineIndex, lines) => (
+    <React.Fragment key={`${line}-${lineIndex}`}>
+      {line.split(/(\*\*.*?\*\*)/g).map((part, partIndex) => {
+        if (part.startsWith("**") && part.endsWith("**")) {
+          return (
+            <strong key={partIndex} className="font-semibold text-[var(--site-text)]">
+              {part.slice(2, -2)}
+            </strong>
+          );
         }
-        return part;
+        return <React.Fragment key={partIndex}>{part}</React.Fragment>;
       })}
-      {i < text.split('\n').length - 1 && <br />}
+      {lineIndex < lines.length - 1 ? <br /> : null}
     </React.Fragment>
   ));
 };
@@ -40,22 +43,30 @@ export function ToolHelpModal({ isOpen, onClose, tool, sectionTitles, onNext, on
   const toolDetails = tool?.details;
   const Icon = tool?.icon ? toolIconMap[tool.icon] : null;
   const titles = sectionTitles || {
-    introduction: "工具介绍",
-    usage: "使用场景",
-    outcome: "你会得到",
+    introduction: "功能介绍",
+    usage: "适合怎么用",
+    outcome: "你会得到什么",
   };
+
+  const sections = useMemo(() => {
+    if (!toolDetails) return [];
+    if (toolDetails.sections && toolDetails.sections.length) {
+      return toolDetails.sections.filter((s) => s.heading?.trim() && s.content?.trim());
+    }
+    const next = [
+      { heading: titles.introduction, content: toolDetails.introduction || "" },
+      { heading: titles.usage, content: toolDetails.usage || "" },
+      { heading: titles.outcome, content: toolDetails.outcome || "" },
+    ];
+    return next.filter((s) => s.content.trim());
+  }, [toolDetails, titles.introduction, titles.outcome, titles.usage]);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  // Prevent scrolling when modal is open
   useEffect(() => {
-    if (isOpen) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "unset";
-    }
+    document.body.style.overflow = isOpen ? "hidden" : "unset";
     return () => {
       document.body.style.overflow = "unset";
     };
@@ -64,106 +75,80 @@ export function ToolHelpModal({ isOpen, onClose, tool, sectionTitles, onNext, on
   if (!mounted || !isOpen || !toolDetails) return null;
 
   return createPortal(
-    <div className="fixed inset-0 z-[90] flex items-center justify-center p-4 sm:p-6 bg-black/60 backdrop-blur-sm transition-all duration-300">
-      {/* Modal Container */}
-      <div 
-        className="relative w-full md:w-[900px] md:h-[660px] bg-white dark:bg-[#1E1E1E] rounded-2xl shadow-2xl overflow-hidden flex flex-col md:flex-row max-h-[88vh] md:max-h-none animate-in fade-in zoom-in-95 duration-200"
+    <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        className="relative flex max-h-[88vh] w-full flex-col overflow-hidden rounded-[28px] border border-[var(--site-border-strong)] bg-[var(--site-panel-strong)] shadow-[0_32px_120px_rgba(45,23,35,0.2)] md:h-[660px] md:w-[900px] md:flex-row"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Close Button */}
         <button
           onClick={onClose}
-          className="absolute top-3 right-3 md:top-4 md:right-4 p-2 rounded-full bg-white/50 dark:bg-black/20 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-[#2C2C2C] transition-all z-20"
+          className="absolute right-3 top-3 z-20 rounded-full bg-white/72 p-2 text-[var(--site-text-soft)] transition hover:bg-white hover:text-[var(--site-accent-strong)] md:right-4 md:top-4"
+          aria-label="关闭说明弹窗"
         >
-          <X className="w-5 h-5" />
+          <X className="h-5 w-5" />
         </button>
 
-        {/* Left Panel (Desktop) / Top Panel (Mobile) - Hero Section */}
-        <div className="relative w-full md:w-[280px] bg-gradient-to-br from-gray-50 to-gray-100 dark:from-[#252525] dark:to-[#1a1a1a] p-4 md:p-8 flex flex-row md:flex-col items-center justify-start md:justify-center text-left md:text-center border-b md:border-b-0 md:border-r border-gray-100 dark:border-[#333333] shrink-0 gap-4 md:gap-0">
-            <div className="w-12 h-12 md:w-20 md:h-20 bg-white dark:bg-[#2C2C2C] rounded-xl md:rounded-2xl shadow-sm flex items-center justify-center md:mb-6 text-[#060E9F] dark:text-blue-400 transform rotate-0 md:rotate-3 shrink-0">
-                {Icon && <Icon className="w-6 h-6 md:w-10 md:h-10" />}
-            </div>
-            
-            <h2 className="text-lg md:text-2xl font-bold text-gray-900 dark:text-white leading-none md:leading-tight pr-8 md:pr-0 pb-0 md:pb-8 whitespace-nowrap">
-                {toolDetails.title || tool?.name}
+        <div className="relative flex w-full flex-row items-center gap-4 border-b border-[var(--site-border)] bg-[var(--site-bg-soft)] p-4 md:w-[280px] md:flex-col md:justify-center md:border-b-0 md:border-r md:p-8 md:text-center">
+          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white text-[var(--site-accent-strong)] shadow-sm md:h-20 md:w-20">
+            {Icon ? <Icon className="h-6 w-6 md:h-10 md:w-10" /> : null}
+          </div>
+
+          <div className="pr-8 md:pr-0">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.3em] text-[var(--site-accent-strong)]">功能说明</div>
+            <h2 className="mt-2 text-lg font-semibold leading-tight text-[var(--site-text)] md:text-2xl">
+              {toolDetails.title || tool?.name}
             </h2>
+          </div>
 
-            <div className="absolute bottom-[-12px] left-4 md:bottom-4 z-20">
-                {onPrev && (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onPrev();
-                        }}
-                        className="p-2 rounded-full bg-white/80 dark:bg-black/40 text-gray-500 hover:text-[#060E9F] dark:text-gray-400 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-[#333333] transition-all shadow-sm backdrop-blur-sm border border-gray-100 dark:border-[#333333]"
-                        title="上一个"
-                    >
-                        <ChevronLeft className="w-5 h-5" />
-                        <span className="sr-only">上一个</span>
-                    </button>
-                )}
-            </div>
+          <div className="absolute bottom-[-14px] left-4 z-20 md:bottom-4">
+            {onPrev ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPrev();
+                }}
+                className="rounded-full border border-[var(--site-border)] bg-white/90 p-2 text-[var(--site-text-soft)] shadow-sm transition hover:border-[var(--site-border-strong)] hover:text-[var(--site-accent-strong)]"
+                title="上一个"
+                aria-label="查看上一个功能"
+              >
+                <ChevronLeft className="h-5 w-5" />
+              </button>
+            ) : null}
+          </div>
 
-            <div className="absolute bottom-[-12px] right-4 md:bottom-4 z-20">
-                {onNext && (
-                    <button
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onNext();
-                        }}
-                        className="p-2 rounded-full bg-white/80 dark:bg-black/40 text-gray-500 hover:text-[#060E9F] dark:text-gray-400 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-[#333333] transition-all shadow-sm backdrop-blur-sm border border-gray-100 dark:border-[#333333]"
-                        title="下一个"
-                    >
-                        <ChevronRight className="w-5 h-5" />
-                        <span className="sr-only">下一个</span>
-                    </button>
-                )}
-            </div>
+          <div className="absolute bottom-[-14px] right-4 z-20 md:bottom-4">
+            {onNext ? (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onNext();
+                }}
+                className="rounded-full border border-[var(--site-border)] bg-white/90 p-2 text-[var(--site-text-soft)] shadow-sm transition hover:border-[var(--site-border-strong)] hover:text-[var(--site-accent-strong)]"
+                title="下一个"
+                aria-label="查看下一个功能"
+              >
+                <ChevronRight className="h-5 w-5" />
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        {/* Right Panel (Desktop) / Bottom Panel (Mobile) - Content Section */}
-        <div className="relative w-full md:flex-1 p-4 md:p-5 overflow-y-auto custom-scrollbar">
-            <div className="space-y-6 px-3 md:px-4">
-                {/* Description */}
-                <div className="animate-in slide-in-from-bottom-2 duration-500 delay-100">
-                    <h3 className="text-lg font-bold text-[#060E9F] dark:text-blue-400 mb-3 flex items-center">
-                        <span className="w-1 h-4 bg-[#060E9F] dark:bg-blue-500 mr-2 rounded-full"></span>
-                        {titles.introduction}
-                    </h3>
-                    <p className="text-xs md:text-sm text-gray-700 dark:text-gray-300 leading-5 md:leading-6">
-                        {renderText(toolDetails.introduction)}
-                    </p>
-                </div>
-
-                {/* Usage Scenario */}
-                {toolDetails.usage && (
-                    <div className="animate-in slide-in-from-bottom-2 duration-500 delay-200">
-                         <h3 className="text-lg font-bold text-[#060E9F] dark:text-blue-400 mb-3 flex items-center">
-                            <span className="w-1 h-4 bg-[#060E9F] dark:bg-blue-500 mr-2 rounded-full"></span>
-                            {titles.usage}
-                        </h3>
-                        <p className="text-xs md:text-sm text-gray-700 dark:text-gray-300 leading-5 md:leading-6">
-                            {renderText(toolDetails.usage)}
-                        </p>
-                    </div>
-                )}
-
-                {/* You Will Get (Outcome) */}
-                {toolDetails.outcome && (
-                    <div className="animate-in slide-in-from-bottom-2 duration-500 delay-300">
-                         <h3 className="text-lg font-bold text-[#060E9F] dark:text-blue-400 mb-3 flex items-center">
-                            <span className="w-1 h-4 bg-[#060E9F] dark:bg-blue-500 mr-2 rounded-full"></span>
-                            {titles.outcome}
-                        </h3>
-                        <p className="text-xs md:text-sm text-gray-700 dark:text-gray-300 leading-5 md:leading-6">
-                            {renderText(toolDetails.outcome)}
-                        </p>
-                    </div>
-                )}
-            </div>
+        <div className="custom-scrollbar w-full overflow-y-auto p-4 md:flex-1 md:p-6">
+          <div className="space-y-6 px-3 md:px-4">
+            {sections.map((section) => (
+              <div key={section.heading}>
+                <h3 className="mb-3 flex items-center text-lg font-semibold text-[var(--site-accent-strong)]">
+                  <span className="mr-2 h-4 w-1 rounded-full bg-[var(--site-accent)]"></span>
+                  {section.heading}
+                </h3>
+                <p className="text-sm leading-7 text-[var(--site-text-soft)]">{renderText(section.content)}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     </div>,
     document.body
   );
 }
+

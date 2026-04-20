@@ -1,6 +1,8 @@
-"use client";
+﻿"use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
+import { useAuth } from "@/context/auth-context";
 
 type AdminUser = {
   id: number;
@@ -15,31 +17,39 @@ type AdminUser = {
 };
 
 export default function AdminUsersPage() {
+  const { user, loading: authLoading } = useAuth();
   const [users, setUsers] = useState<AdminUser[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actionUserId, setActionUserId] = useState<number | null>(null);
+  const isUnauthorized = !authLoading && !loading && user?.role !== "admin";
 
   const loadUsers = async () => {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/admin/users");
+      const res = await fetch("/api/admin/users", { cache: "no-store" });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error || "Failed to load users");
+        throw new Error(data.error || "加载用户列表失败");
       }
       setUsers(data.users || []);
     } catch (err: any) {
-      setError(err.message || "Failed to load users");
+      setError(err.message || "加载用户列表失败");
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
+    if (authLoading) return;
+    if (user?.role !== "admin") {
+      setLoading(false);
+      setError("你没有权限查看此页面");
+      return;
+    }
     loadUsers();
-  }, []);
+  }, [authLoading, user?.role]);
 
   const handleClearPassword = async (user: AdminUser) => {
     if (!window.confirm(`确认清除用户 ${user.email} 的密码吗？`)) return;
@@ -61,7 +71,7 @@ export default function AdminUsersPage() {
   };
 
   const handleDeleteUser = async (user: AdminUser) => {
-    if (!window.confirm(`确认删除用户 ${user.email} 吗？将同步删除其对话和评测记录。`)) return;
+    if (!window.confirm(`确认删除用户 ${user.email} 吗？`)) return;
     setActionUserId(user.id);
     try {
       const res = await fetch(`/api/admin/users/${user.id}`, { method: "DELETE" });
@@ -81,21 +91,21 @@ export default function AdminUsersPage() {
         <div className="flex justify-between items-center border-b border-gray-800 pb-6">
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-gray-100">用户管理</h1>
-            <p className="text-gray-400 mt-2">查看用户列表并执行常见账户操作。</p>
+            <p className="text-gray-400 mt-2">查看账号、角色、密码状态和核心使用数据。</p>
           </div>
           <div className="flex gap-3">
             <button
-              onClick={loadUsers}
+              onClick={() => void loadUsers()}
               className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors"
             >
               刷新
             </button>
-            <a href="/admin/dashboard" className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors">
+            <Link href="/admin/dashboard" className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors">
               返回仪表盘
-            </a>
-            <a href="/" className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors">
+            </Link>
+            <Link href="/" className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded-lg text-sm transition-colors">
               返回聊天
-            </a>
+            </Link>
           </div>
         </div>
 
@@ -106,7 +116,38 @@ export default function AdminUsersPage() {
         )}
 
         {loading ? (
-          <div className="text-gray-300">加载中...</div>
+          <div className="rounded-2xl border border-gray-800 bg-[#171717] p-8 text-gray-300">正在加载用户列表...</div>
+        ) : isUnauthorized ? (
+          <div className="rounded-2xl border border-amber-500/30 bg-amber-500/10 p-8">
+            <h2 className="text-xl font-semibold text-amber-200">无权访问用户管理</h2>
+            <p className="mt-3 text-sm text-amber-100/80">
+              当前账号不是管理员，因此页面不会继续加载用户列表。
+            </p>
+            <div className="mt-6 flex gap-3">
+              <Link href="/admin/dashboard" className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-sm transition-colors">
+                返回仪表盘
+              </Link>
+              <Link href="/" className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-sm transition-colors">
+                返回首页
+              </Link>
+            </div>
+          </div>
+        ) : error && users.length === 0 ? (
+          <div className="rounded-2xl border border-red-500/30 bg-red-500/10 p-8">
+            <h2 className="text-xl font-semibold text-red-200">用户列表加载失败</h2>
+            <p className="mt-3 text-sm text-red-100/80">{error}</p>
+            <div className="mt-6 flex gap-3">
+              <button
+                onClick={() => void loadUsers()}
+                className="px-4 py-2 rounded-lg bg-red-500/20 hover:bg-red-500/30 text-sm transition-colors"
+              >
+                重新加载
+              </button>
+              <Link href="/admin/dashboard" className="px-4 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-sm transition-colors">
+                返回仪表盘
+              </Link>
+            </div>
+          </div>
         ) : (
           <div className="bg-[#1E1E1E] rounded-xl border border-gray-800 overflow-hidden shadow-xl">
             <div className="overflow-x-auto">
@@ -119,7 +160,7 @@ export default function AdminUsersPage() {
                     <th className="px-6 py-4">角色</th>
                     <th className="px-6 py-4">密码</th>
                     <th className="px-6 py-4 text-right">对话</th>
-                    <th className="px-6 py-4 text-right">评测</th>
+                    <th className="px-6 py-4 text-right">测评</th>
                     <th className="px-6 py-4">创建时间</th>
                     <th className="px-6 py-4">操作</th>
                   </tr>
@@ -148,14 +189,14 @@ export default function AdminUsersPage() {
                             disabled={!user.hasPassword || actionUserId === user.id}
                             className="px-3 py-1.5 rounded-md bg-gray-700 hover:bg-gray-600 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            清除密码
+                            {actionUserId === user.id ? "处理中..." : "清除密码"}
                           </button>
                           <button
                             onClick={() => handleDeleteUser(user)}
                             disabled={actionUserId === user.id}
                             className="px-3 py-1.5 rounded-md bg-red-600/80 hover:bg-red-600 text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                           >
-                            删除用户
+                            {actionUserId === user.id ? "处理中..." : "删除用户"}
                           </button>
                         </div>
                       </td>
@@ -164,7 +205,7 @@ export default function AdminUsersPage() {
                   {users.length === 0 && (
                     <tr>
                       <td className="px-6 py-6 text-gray-500" colSpan={9}>
-                        当前没有用户
+                        当前还没有可展示的用户数据
                       </td>
                     </tr>
                   )}
@@ -177,3 +218,11 @@ export default function AdminUsersPage() {
     </div>
   );
 }
+
+
+
+
+
+
+
+

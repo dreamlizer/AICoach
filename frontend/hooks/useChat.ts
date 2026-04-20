@@ -6,6 +6,64 @@ import { usePreferences } from "@/context/preferences-context";
 import { SAMPLE_MESSAGES } from "@/lib/sample_data";
 import { apiClient } from "@/lib/api-client";
 
+type ChatAttachment = {
+  name: string;
+  type: string;
+  text?: string;
+  url?: string;
+};
+
+const ALLOWED_FILE_EXTENSIONS = ["pdf", "doc", "docx", "ppt", "pptx", "txt", "png", "jpg", "jpeg", "gif"];
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => resolve(reader.result as string);
+    reader.onerror = (error) => reject(error);
+  });
+}
+
+async function normalizeAttachment(file: File): Promise<ChatAttachment | null> {
+  const ext = file.name.split(".").pop()?.toLowerCase() || "";
+  const isImage = file.type.startsWith("image/");
+
+  if (!isImage && !ALLOWED_FILE_EXTENSIONS.includes(ext)) {
+    return null;
+  }
+
+  if (ext === "txt") {
+    return { name: file.name, type: file.type || "text/plain", text: await file.text() };
+  }
+
+  if (isImage) {
+    try {
+      const base64 = await fileToBase64(file);
+      return { name: file.name, type: file.type || ext, url: base64 };
+    } catch (error) {
+      console.error("Failed to convert image to base64", error);
+    }
+  }
+
+  return { name: file.name, type: file.type || ext };
+}
+
+function buildAttachmentSummary(attachments: ChatAttachment[]) {
+  if (attachments.length === 0) return "";
+
+  return attachments
+    .map((item) => {
+      if (item.text) return `- ${item.name}\n${item.text}`;
+      if (item.url) return `- ${item.name} (${item.type}) [url:${item.url}]`;
+      return `- ${item.name} (${item.type})`;
+    })
+    .join("\n");
+}
+
+function removeThinkingMessage(prev: Message[], thinkingMessageId: string) {
+  return prev.filter((message) => message.id !== thinkingMessageId);
+}
+
 export function useChat(
   conversationId: string, 
   activeToolId: string | null, 
@@ -15,7 +73,7 @@ export function useChat(
 ) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [attachments, setAttachments] = useState<{ name: string; type: string; text?: string; url?: string }[]>([]);
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([]);
   const [modelMode, setModelMode] = useState<ModelMode>("fast");
   const { partnerStyle, modelProvider } = usePreferences();
   const [abortController, setAbortController] = useState<AbortController | null>(null);
@@ -47,39 +105,15 @@ export function useChat(
 
   const handleFilesSelected = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
-    const allowedExtensions = ["pdf", "doc", "docx", "ppt", "pptx", "txt", "png", "jpg", "jpeg", "gif"];
-    const next: { name: string; type: string; text?: string; url?: string }[] = [];
-    
-    const fileToBase64 = (file: File): Promise<string> => {
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = (error) => reject(error);
-      });
-    };
+    const next: ChatAttachment[] = [];
 
     for (const file of Array.from(files)) {
-      const ext = file.name.split(".").pop()?.toLowerCase() || "";
-      const isImage = file.type.startsWith("image/");
-      if (!isImage && !allowedExtensions.includes(ext)) {
-        continue;
-      }
-      if (ext === "txt") {
-        const text = await file.text();
-        next.push({ name: file.name, type: file.type || "text/plain", text });
-      } else if (isImage) {
-        try {
-          const base64 = await fileToBase64(file);
-          next.push({ name: file.name, type: file.type || ext, url: base64 });
-        } catch (e) {
-          console.error("Failed to convert image to base64", e);
-          next.push({ name: file.name, type: file.type || ext });
-        }
-      } else {
-        next.push({ name: file.name, type: file.type || ext });
+      const attachment = await normalizeAttachment(file);
+      if (attachment) {
+        next.push(attachment);
       }
     }
+
     if (next.length > 0) {
       setAttachments((prev) => [...prev, ...next]);
     }
@@ -114,7 +148,7 @@ export function useChat(
       setAbortController(null);
     }
     // Always remove thinking message to ensure UI updates immediately
-    setMessages((prev) => prev.filter(m => m.kind !== "thinking"));
+    setMessages((prev) => prev.filter((message) => message.kind !== "thinking"));
   }, [abortController]);
 
   const sendMessage = async (e: React.FormEvent) => {
@@ -125,15 +159,7 @@ export function useChat(
     const controller = new AbortController();
     setAbortController(controller);
 
-    const attachmentSummary = attachments.length
-      ? attachments
-          .map((item) => {
-            if (item.text) return `- ${item.name}\n${item.text}`;
-            if (item.url) return `- ${item.name} (${item.type}) [url:${item.url}]`;
-            return `- ${item.name} (${item.type})`;
-          })
-          .join("\n")
-      : "";
+    const attachmentSummary = buildAttachmentSummary(attachments);
     const messageWithAttachments = attachmentSummary
       ? `${text ? text : ""}\n\n[附件]\n${attachmentSummary}`.trim()
       : text;
@@ -175,7 +201,9 @@ export function useChat(
 
       if (res.status === 403) {
         // Limit reached
-        setMessages((prev) => prev.filter((m) => m.id !== userMessage.id && m.id !== thinkingMessage.id));
+        setMessages((prev) =>
+          prev.filter((message) => message.id !== userMessage.id && message.id !== thinkingMessage.id)
+        );
         
         // Restore input
         setInput(currentInput);
@@ -236,8 +264,7 @@ export function useChat(
                 cleanedReply || (extractedHtml ? "已生成卡片，请在画布查看。" : "分析完成。");
               
               setMessages((prev) => {
-                const filtered = prev.filter((message) => message.id !== thinkingMessage.id);
-                const newMessages: Message[] = [...filtered];
+                const newMessages: Message[] = [...removeThinkingMessage(prev, thinkingMessage.id)];
 
                 if (data.debug_info) {
                    newMessages.push({

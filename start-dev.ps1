@@ -1,6 +1,30 @@
 # AI Coach Launcher
 # ==========================================
 
+function Set-DreamLabWindowTitle {
+    try {
+        $Host.UI.RawUI.WindowTitle = "Dream Lab Dev Forge"
+    } catch {
+        # Ignore hosts that do not allow changing the console title.
+    }
+
+    try {
+        [Console]::Title = "Dream Lab Dev Forge"
+    } catch {
+        # Ignore hosts that do not allow changing the console title.
+    }
+}
+
+Set-DreamLabWindowTitle
+
+try {
+    [Console]::InputEncoding = [System.Text.UTF8Encoding]::new($false)
+    [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+    $OutputEncoding = [System.Text.UTF8Encoding]::new($false)
+} catch {
+    # Ignore hosts that do not allow changing console encoding.
+}
+
 # 1. Check Node.js
 Write-Host "[1/3] Checking Node.js..." -NoNewline
 try {
@@ -44,6 +68,32 @@ if (-not (Test-Path $frontendDir)) {
 
 Set-Location $frontendDir
 
+# 2.5. Clean stale dev artifacts / stale port owner
+Write-Host "`n[2.5/3] Cleaning stale dev cache and port..." -ForegroundColor Cyan
+try {
+    $listeners = Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue
+    if ($listeners) {
+        $pids = $listeners | Select-Object -ExpandProperty OwningProcess -Unique
+        foreach ($pid in $pids) {
+            if ($pid -and $pid -ne $PID) {
+                Stop-Process -Id $pid -Force -ErrorAction SilentlyContinue
+                Write-Host "Stopped existing process on :3000 (PID $pid)." -ForegroundColor Yellow
+            }
+        }
+    }
+} catch {
+    Write-Host "Port check skipped." -ForegroundColor DarkGray
+}
+
+if (Test-Path ".next") {
+    try {
+        Remove-Item -LiteralPath ".next" -Recurse -Force -ErrorAction Stop
+        Write-Host "Removed stale .next cache." -ForegroundColor Gray
+    } catch {
+        Write-Host "Could not remove .next cache (will continue)." -ForegroundColor DarkGray
+    }
+}
+
 # 2. Check Dependencies
 Write-Host "`n[2/3] Checking dependencies..." 
 $nextBin = Join-Path "node_modules" ".bin\next.cmd"
@@ -63,28 +113,46 @@ if (-not (Test-Path "node_modules") -or -not (Test-Path $nextBin)) {
     Write-Host "Dependencies ready." -ForegroundColor Gray
 }
 
-# 3. Start Server
+# 3. Start Server (auto-restart guard)
 Write-Host "`n[3/3] Starting server..." -ForegroundColor Cyan
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host "   Browser should open http://localhost:3000 automatically."
 Write-Host "   Please DO NOT close this window."
+Write-Host "   If dev server exits unexpectedly, it will auto-restart."
 Write-Host "========================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# Use cmd /c to run npm, which resolves the .cmd extension issue on Windows
-try {
-    $devProcess = Start-Process -FilePath "cmd.exe" -ArgumentList "/c npm run dev" -NoNewWindow -PassThru
-} catch {
-    Write-Host "Error starting npm via cmd.exe. Trying direct npm.cmd..." -ForegroundColor Yellow
-    $devProcess = Start-Process -FilePath "npm.cmd" -ArgumentList "run dev" -NoNewWindow -PassThru
-}
+$browserOpened = $false
 
-Start-Sleep -Seconds 5
+while ($true) {
+    Write-Host "[dev] launching Next.js dev server..." -ForegroundColor Gray
+    Set-DreamLabWindowTitle
 
-Start-Process "http://localhost:3000"
+    if (-not $browserOpened) {
+        # Give the server a moment to bind the port before opening the browser.
+        Start-Job -ScriptBlock {
+            Start-Sleep -Seconds 3
+            Start-Process "http://localhost:3000"
+        } | Out-Null
+        $browserOpened = $true
+    }
 
-if ($devProcess) {
-    $devProcess.WaitForExit()
-} else {
-    Read-Host "Failed to start server. Press Enter to exit..."
+    # Pipe output through PowerShell so framework title control sequences do not
+    # directly reach the terminal tab, then keep restoring our preferred title.
+    $esc = [char]27
+    & cmd.exe /d /s /c "chcp 65001>nul && npm.cmd run dev 2>&1" | ForEach-Object {
+        $line = "$_"
+        $line = $line -replace "$esc\][^\a$esc]*(\a|$esc\\)", ""
+        [Console]::WriteLine($line)
+        Set-DreamLabWindowTitle
+    }
+    $exitCode = $LASTEXITCODE
+    Set-DreamLabWindowTitle
+
+    if ($exitCode -eq 0) {
+        Write-Host "[dev] server exited (code 0). Restarting in 2 seconds..." -ForegroundColor Yellow
+    } else {
+        Write-Host "[dev] server exited unexpectedly (code $exitCode). Restarting in 2 seconds..." -ForegroundColor Yellow
+    }
+    Start-Sleep -Seconds 2
 }

@@ -7,7 +7,7 @@ export function ProjectLogo({ className }: { className?: string }) {
       {/* New PNG Logo */}
       <Image 
         src="/logo2.png" 
-        alt="Logo" 
+        alt="Dream Lab Logo" 
         fill
         sizes="(max-width: 768px) 48px, 96px"
         className="object-contain dark:filter dark:grayscale dark:invert dark:mix-blend-screen"

@@ -1,61 +1,56 @@
-import './globals.css'
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import { PreferencesProvider } from '@/context/preferences-context'
-import { AuthProvider } from '@/context/auth-context'
-import { LanguageProvider } from '@/context/language-context'
-import { DynamicTitle } from '@/app/components/DynamicTitle'
-
-const inter = Inter({ subsets: ['latin'] })
+import "./globals.css";
+import type { Metadata } from "next";
+import { PreferencesProvider } from "@/context/preferences-context";
+import { AuthProvider } from "@/context/auth-context";
+import { LanguageProvider } from "@/context/language-context";
+import { DynamicTitle } from "@/app/components/DynamicTitle";
 
 export const metadata: Metadata = {
-  metadataBase: new URL('https://www.executiveinsider.top'),
-  title: '高管AI内参',
-  description: 'AI Partner for Strategy',
+  metadataBase: new URL("https://www.executiveinsider.top"),
+  title: "梦想实验站 | Dream Lab",
+  description: "Dream Lab for strategy, exploration, and decision support",
   openGraph: {
-    title: '高管AI内参',
-    description: '你的24/7私人决策智库',
-    url: 'https://www.executiveinsider.top',
-    siteName: '高管AI内参',
+    title: "梦想实验站 | Dream Lab",
+    description: "你的 24/7 灵感、探索与决策实验空间",
+    url: "https://www.executiveinsider.top",
+    siteName: "梦想实验站 | Dream Lab",
     images: [
       {
-        url: '/share-icon.png', // Must be an absolute URL in production, but metadataBase handles it
+        url: "/share-icon.png",
         width: 300,
         height: 300,
-        alt: '高管AI内参',
+        alt: "梦想实验站 | Dream Lab",
       },
     ],
-    locale: 'zh_CN',
-    type: 'website',
+    locale: "zh_CN",
+    type: "website",
   },
   icons: {
-    icon: '/logo2.png',
-    apple: '/share-icon.png', // Fallback for some platforms
+    icon: "/dream-lab-icon.svg",
+    apple: "/share-icon.png",
   },
-}
+};
 
 export default function RootLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
-      <body className={inter.className}>
-        <div style={{ display: 'none', visibility: 'hidden', height: 0, width: 0, overflow: 'hidden' }}>
+    <html lang="zh-CN">
+      <body className="site-surface">
+        <div style={{ display: "none", visibility: "hidden", height: 0, width: 0, overflow: "hidden" }}>
           {/* WeChat Share Image Hack */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/share-icon.png" alt="logo" />
+          <img src="/share-icon.png" alt="Dream Lab logo" />
         </div>
         <AuthProvider>
           <LanguageProvider>
             <DynamicTitle />
-            <PreferencesProvider>
-              {children}
-            </PreferencesProvider>
+            <PreferencesProvider>{children}</PreferencesProvider>
           </LanguageProvider>
         </AuthProvider>
       </body>
     </html>
-  )
+  );
 }

@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { createConversation, updateConversationTitle, updateConversationTool } from "@/lib/db";
 
 export async function POST(request: Request) {
@@ -12,9 +12,9 @@ export async function POST(request: Request) {
       );
     }
 
-    createConversation(conversationId, title, toolId || null);
-    updateConversationTitle(conversationId, title);
-    updateConversationTool(conversationId, toolId || null);
+    await createConversation(conversationId, title, toolId || null);
+    await updateConversationTitle(conversationId, title);
+    await updateConversationTool(conversationId, toolId || null);
 
     return NextResponse.json({ ok: true });
   } catch (error) {

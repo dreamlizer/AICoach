@@ -8,6 +8,7 @@ type User = {
   email: string;
   name?: string;
   avatar?: string;
+  role?: string;
 } | null;
 
 type AuthContextType = {
@@ -42,16 +43,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data: any = await apiClient.auth.me();
       setUser(data.user);
-    } catch (error) {
-      setUser(null);
+    } catch {
+      // Keep current local session on transient server/network errors.
+      // We only clear user when backend explicitly returns { user: null }.
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    checkAuth();
+    try {
+      const cached = localStorage.getItem("auth-user");
+      if (cached) {
+        setUser(JSON.parse(cached));
+      }
+    } catch {}
+    setLoading(false);
   }, []);
+
+  useEffect(() => {
+    void checkAuth();
+  }, []);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      void checkAuth();
+    }, 60 * 1000);
+    return () => window.clearInterval(id);
+  }, []);
+
+  useEffect(() => {
+    if (user) {
+      localStorage.setItem("auth-user", JSON.stringify(user));
+    } else {
+      localStorage.removeItem("auth-user");
+    }
+  }, [user]);
 
   const login = async (email: string, code: string, name?: string) => {
     try {
@@ -92,8 +119,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const data: any = await apiClient.auth.updateProfile(updates);
       setUser(data.user);
-    } catch (error: any) {
-      throw new Error("Failed to update profile");
+    } catch {
+      throw new Error("更新资料失败");
     }
   };
 
@@ -103,7 +130,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, loginWithPassword, resetPassword, updateProfile, logout, checkAuth }}>
+    <AuthContext.Provider
+      value={{ user, loading, login, register, loginWithPassword, resetPassword, updateProfile, logout, checkAuth }}
+    >
       {children}
     </AuthContext.Provider>
   );

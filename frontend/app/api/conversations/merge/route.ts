@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getDb } from "@/lib/db";
+import { claimConversationForUser } from "@/lib/db";
 import { getCurrentUser } from "@/lib/session";
 
 export async function POST(request: Request) {
@@ -10,32 +10,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Conversation ID is required" }, { status: 400 });
     }
 
-    const user = getCurrentUser();
+    const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const db = getDb();
-    
-    // Check if conversation exists and is anonymous
-    const conversation = db.prepare("SELECT * FROM conversations WHERE id = ?").get(conversationId) as any;
+    const result = await claimConversationForUser(conversationId, user.id);
 
-    if (!conversation) {
+    if (result.status === "not_found") {
       return NextResponse.json({ error: "Conversation not found" }, { status: 404 });
     }
 
-    if (conversation.user_id && conversation.user_id !== user.id) {
-       // Already belongs to someone else
-       return NextResponse.json({ error: "Conversation already claimed" }, { status: 403 });
+    if (result.status === "claimed_by_other") {
+      return NextResponse.json({ error: "Conversation already claimed" }, { status: 403 });
     }
 
-    if (conversation.user_id === user.id) {
-      // Already belongs to current user
+    if (result.status === "already_claimed") {
       return NextResponse.json({ success: true, message: "Already merged" });
     }
-
-    // Merge: Update user_id
-    db.prepare("UPDATE conversations SET user_id = ? WHERE id = ?").run(user.id, conversationId);
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -52,3 +52,38 @@ export type WorldCountryProfile = {
 };
 
 export type MapScope = "china" | "world";
+
+export type WorldRuntimeMeta = {
+  zhName?: string;
+  capitalEn?: string;
+  capitalZh?: string;
+  population?: number;
+  area?: number;
+  iso?: string;
+  region?: string;
+};
+
+export type WorldFocusRegion = "ALL" | "Africa" | "Asia" | "Europe" | "NorthAmerica" | "SouthAmerica" | "Oceania";
+
+export type MarineLabelKind = "ocean" | "strait";
+
+export type MarineLabel = {
+  name: string;
+  coord: [number, number];
+  kind: MarineLabelKind;
+  scopes: WorldFocusRegion[];
+  minZoom?: number;
+  maxZoom?: number;
+  rotation?: number;
+};
+
+export type SearchItemType = "china_region" | "world_country" | "world_capital" | "marine";
+
+export type SearchItem = {
+  key: string;
+  label: string;
+  type: SearchItemType;
+  targetName: string;
+  targetScope: MapScope;
+  coord: [number, number] | null;
+};

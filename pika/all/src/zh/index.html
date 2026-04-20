@@ -1,0 +1,436 @@
+﻿<!DOCTYPE html>
+<html lang="zh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+    <title>鐨崱涓樻墦鎺掔悆</title>
+    <meta name="description" content="绶氫笂鐜╃毊鍗′笜鎵撴帓鐞? />
+    <meta name="author" content="Kyutae Lee" />
+
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="theme-color" content="#FFFFFF" />
+    <meta name="apple-mobile-web-app-title" content="鐨崱涓樻墦鎺掔悆" />
+    <link
+      rel="apple-touch-icon"
+      sizes="192x192"
+      href="../resources/assets/images/IDI_PIKAICON-1_gap_filled_192.png"
+    />
+    <link rel="manifest" href="./manifest.json" />
+
+    <link
+      rel="icon"
+      type="image/png"
+      sizes="32x32"
+      href="../resources/assets/images/IDI_PIKAICON-0.png"
+    />
+    <link rel="stylesheet" href="../resources/style.css" />
+  </head>
+  <body>
+    <div id="flex-container">
+      <div id="menu-bar">
+        <div class="btn-container left">
+          <div class="relative-container">
+            <button
+              type="button"
+              id="game-dropdown-btn"
+              class="btn dropdown-btn"
+            >
+              閬婃埐
+            </button>
+            <div id="game-dropdown" class="dropdown">
+              <button type="button" id="pause-btn" class="btn">
+                <span class="check">&check; </span>鏆仠
+              </button>
+              <button type="button" id="restart-btn" class="btn">閲嶄締</button>
+            </div>
+          </div>
+          <div class="relative-container">
+            <button
+              type="button"
+              id="options-dropdown-btn"
+              class="btn dropdown-btn"
+            >
+              閬搁爡
+            </button>
+            <div id="options-dropdown" class="dropdown">
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="graphic-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  Graphic &#9654;&#xfe0e;
+                </button>
+                <div id="graphic-submenu" class="submenu">
+                  <button
+                    type="button"
+                    id="graphic-sharp-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">&check; </span>sharp
+                  </button>
+                  <button type="button" id="graphic-soft-btn" class="btn">
+                    <span class="check">&check; </span>soft
+                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="bgm-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  鑳屾櫙闊虫▊ &#9654;&#xfe0e;
+                </button>
+                <div id="bgm-submenu" class="submenu">
+                  <button type="button" id="bgm-on-btn" class="btn selected">
+                    <span class="check">&check; </span>闁?                  </button>
+                  <button type="button" id="bgm-off-btn" class="btn">
+                    <span class="check">&check; </span>闂?                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="sfx-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  SFX &#9654;&#xfe0e;
+                </button>
+                <div id="sfx-submenu" class="submenu">
+                  <button type="button" id="stereo-btn" class="btn selected">
+                    <span class="check">&check; </span>stereo
+                  </button>
+                  <button type="button" id="mono-btn" class="btn">
+                    <span class="check">&check; </span>mono
+                  </button>
+                  <button type="button" id="sfx-off-btn" class="btn">
+                    <span class="check">&check; </span>闂?                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="speed-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  閫熷害 &#9654;&#xfe0e;
+                </button>
+                <div id="speed-submenu" class="submenu">
+                  <button type="button" id="slow-speed-btn" class="btn">
+                    <span class="check">&check; </span>鎱㈤€?                  </button>
+                  <button
+                    type="button"
+                    id="medium-speed-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">&check; </span>鏅€?                  </button>
+                  <button type="button" id="fast-speed-btn" class="btn">
+                    <span class="check">&check; </span>蹇€?                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="winning-score-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  閬婃埐鍒嗘暩 &#9654;&#xfe0e;
+                </button>
+                <div id="winning-score-submenu" class="submenu">
+                  <button type="button" id="winning-score-5-btn" class="btn">
+                    <span class="check">&check; </span>5鍒?                  </button>
+                  <button type="button" id="winning-score-10-btn" class="btn">
+                    <span class="check">&check; </span>10鍒?                  </button>
+                  <button
+                    type="button"
+                    id="winning-score-15-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">&check; </span>15鍒?                  </button>
+                </div>
+              </div>
+              <div class="relative-container">
+                <button
+                  type="button"
+                  id="practice-mode-submenu-btn"
+                  class="btn submenu-btn"
+                >
+                  绶寸繏妯″紡 &#9654;&#xfe0e;
+                </button>
+                <div id="practice-mode-submenu" class="submenu">
+                  <button type="button" id="practice-mode-on-btn" class="btn">
+                    <span class="check">&check; </span>闁?                  </button>
+                  <button
+                    type="button"
+                    id="practice-mode-off-btn"
+                    class="btn selected"
+                  >
+                    <span class="check">&check; </span>闂?                  </button>
+                </div>
+              </div>
+              <button type="button" id="reset-to-default-btn" class="btn">
+                鎭㈠京鑷抽爯瑷€?              </button>
+            </div>
+          </div>
+          <div class="color-scheme-toggle-switch-container">
+            <input
+              type="checkbox"
+              id="dark-color-scheme-checkbox-1"
+              class="toggle-switch dark-color-scheme-checkbox"
+            />
+            <label for="dark-color-scheme-checkbox-1"></label>
+          </div>
+        </div>
+        <div class="btn-container right">
+          <button type="button" id="about-btn" class="btn">
+            <span class="text-about">Help</span
+            ><span class="text-play hidden">Start</span>
+          </button>
+        </div>
+      </div>
+      <div class="if-embedded-in-other-website hidden">
+        <div class="limit-width">
+          It seems that you are playing this web version of
+          <span class="no-wrap">Pikachu Volleyball</span>
+          in some foreign website. If you visit the following link directly, you
+          can play the game in a pleasant environment without ads.
+          <div class="original-address">
+            The original address of this web version of Pikachu Volleyball:<br />
+            <a
+              href="https://gorisanson.github.io/pikachu-volleyball/zh/"
+              target="_blank"
+              rel="noopener"
+              >https://gorisanson.github.io/pikachu-volleyball/zh/</a
+            >
+          </div>
+          <button type="button" class="btn-in-box">
+            <span>闂滈枆</span>
+          </button>
+        </div>
+      </div>
+      <div id="game-canvas-container">
+        <div class="fade-in-box about hidden" id="about-box">
+          <div id="about-box-head">
+            <h1>鐨崱涓樻墦鎺掔悆</h1>
+            <p class="languages">
+              &check; Chinese(涓枃) |
+              <a href="../en/" target="_self">English</a> |
+              <a href="../ko/" target="_self">Korean(頃滉淡鞏?</a>
+            </p>
+            <p class="p2p-online-version">
+              浣犱篃鍙互閬婄帺<a
+                href="https://gorisanson.github.io/pikachu-volleyball-p2p-online/en/"
+                >绶氫笂鐜╁灏嶆埌鐗堟湰</a
+              >銆?            </p>
+            <p class="super-ai-edition">
+              浣犱篃鍙互閬婄帺鐢?              <a href="https://blog.duckll.tw/" target="_blank" rel="noopener"
+                >DuckLL</a
+              >
+              闁嬬櫦鐨?a
+                href="https://pika.duckll.tw/zh/"
+                target="_blank"
+                rel="noopener"
+                >瓒呯礆 AI 鐗堟湰</a
+              >銆?            </p>
+            <p class="original-by">
+              鍘熷鐗堢殑鐨勭毊鍗′笜鎵撴帓鐞?(瀵炬垿銇淬亱銇°倕锝炪€€锞嬶緸锝帮緛锞婏緸锞氾桨绶? 鏄敱
+              <br />
+              1997 (C)
+              <span class="no-wrap">SACHI SOFT / SAWAYAKAN Programmers</span
+              ><br />
+              1997 (C) <span class="no-wrap">Satoshi Takenouchi</span>
+              <br />
+              鎵€闁嬬櫦鐨?            </p>
+            <p class="reverse-engineered-by">
+              姝ら亰鎴叉槸鐢?              <span class="no-wrap"
+                ><a href="https://gorisanson.github.io/">Kyutae Lee</a></span
+              >
+              <br />
+              閫忛亷閫嗗悜宸ョ▼鎶€琛撹В鏋愬師濮嬮亰鎴蹭甫灏囧叾瀵︿綔鑷虫绶氫笂鐗堟湰
+            </p>
+            <p class="source-code-on">
+              浣犲彲浠ュ墠寰€
+              <a
+                href="https://github.com/gorisanson/pikachu-volleyball"
+                target="_blank"
+                rel="noopener"
+                >GitHub</a
+              >
+              妾㈣鍘熷纰?            </p>
+            <p class="release-date">閲嬪嚭鏃ユ湡: 2020-03-26</p>
+            <p class="update-history-on">
+              <a href="./update-history/" target="_self">鏇存柊绱€閷?/a>
+            </p>
+          </div>
+          <div class="margin-top limit-width">
+            <div class="align-center-horizontally">
+              <img
+                class="screenshot"
+                src="../resources/assets/images/screenshot.png"
+                width="1728"
+                height="1216"
+                alt="鐨崱涓樻墦鎺掔悆涔嬮亰鎴叉埅鍦?
+              />
+            </div>
+            <p>
+              鐨崱涓樻墦鎺掔悆鏄?997骞存檪鐢辨棩鏈枊鐧肩殑涓€娆網indows閬婃埐銆傛閬婃埐鍦ㄦ垜灏忕殑
+              鏅傚€欐柤闊撳湅闈炲父娴佽銆傛垜鏅傚父鑸囨湅鍙嬩竴鍚岄亰鐜╂閬婃埐銆?            </p>
+            <p>
+              姝ょ窔涓婄増鏈槸閫忛亷灏嶅師濮嬮亰鎴蹭綔閫嗗悜宸ョ▼锛屼甫灏囧叾鍒╃敤JavaScript瀵﹀仛鍑?              渚嗐€傛閬婃埐鑳界洿鎺ュ湪鐎忚鍣ㄤ笂鍩疯锛屽洜姝ゆ湁鍒ユ柤鍘熷厛鐨勯亰鎴诧紝鍙互涓嶅彈浣滄キ
+              绯荤当鐨勯檺鍒躲€?            </p>
+            <p class="margin-top"><span class="thick">Controls:</span></p>
+            <div class="align-center-horizontally">
+              <img
+                class="controls"
+                src="../resources/assets/images/controls.png"
+                width="1994"
+                height="997"
+                alt="game controls"
+              />
+              <p>濡傛灉浣犳湁钘嶇墮閸电洡锛屼綘涔熷彲浠ュ槜瑭﹀湪瑙告帶/琛屽嫊瑁濈疆涓婇亰鐜┿€?/p>
+            </div>
+            <p class="margin-top">
+              <span class="thick">灏忔彁绀?1:</span><br />
+              鑸囧師濮嬮亰鎴茬浉鍚岋紝鍦ㄩ伕鎿?              <span class="no_wrap">"1浜恒仹銇淬亱銇°倕~"</span> 渚嗚垏闆昏叇閬婃埐灏嶆埌鏅傦紝
+              閫忛亷鎸変笅銆孼閸点€嶉枊濮嬬帺鍙垚鐐?1P 锛岃€岃嫢鏄寜涓嬨€孍nter閸点€嶉亰鐜╁墖鏈冩垚鐐?              2P銆?            </p>
+            <p class="margin-top">
+              <span class="thick">灏忔彁绀?2:</span><br />
+
+              1P鍙互閫忛亷銆孷閸点€嶄締鐣朵綔椤嶅鐨勪笅閸点€傘€孷閸点€嶈垏鍘熷厛鐨勩€孎閸点€嶇暐鏈変笉
+              鍚岋紝浣犲彲浠ュ槜瑭︾湅鐪嬩娇鐢ㄥ畠銆?(<span class="no-wrap"
+                ><a
+                  href="https://twitter.com/repeat_c/status/1256494157884841984"
+                  target="_blank"
+                  rel="noopener"
+                  >鐗瑰垾鎰熻瑵 @repeat_c 鍛婄煡</a
+                ></span
+              >锛屾鍘熼亰鎴蹭箣鐗归粸鑳藉湪鏈窔涓婄増涓憟鐝俱€?
+            </p>
+            <p class="margin-top">
+              <span class="thick">灏忔彁绀?3:</span><br />
+              濡傛灉浣犳兂 闅辫棌/椤ず 閬婃埐閬稿柈鎺у埗鍒楋紝璜嬫寜涓嬨€孍sc閸点€嶃€?            </p>
+            <p class="margin-top">
+              <span class="thick">灏忔彁绀?4:</span><br />
+              鎴戝鍔犱簡鍘熷閬婃埐涓矑鏈夌殑绶寸繏妯″紡锛屼綘鍙互閫忛亷
+              <span class="no_wrap">"閬搁爡 &rarr; 绶寸繏妯″紡 &rarr; 闁?</span>
+              闁嬪暉绶寸繏妯″紡銆?            </p>
+            <p class="margin-top">
+              <span class="thick">灏忔彁绀?5:</span><br />
+              濡傛灉浣犳兂鍦ㄧ劇缍茶矾鐨勭挵澧冧笅閬婄帺姝ら亰鎴诧紝浣犲彲浠ュ皣姝ら爜闈㈠畨瑁濇垚App銆傚湪闆昏叇
+              涓婏紝浣犲彲浠ュ弮鑰?              <a
+                href="https://support.google.com/chrome/answer/9658361"
+                target="_blank"
+                rel="noopener"
+                >浣跨敤Chrome鐎忚鍣ㄤ締瀹夎</a
+              >銆?鍦ㄦ墜姗熶笂锛屼綘鍙互鍦ㄦ闋侀潰涓婇粸閬?銆屽姞鍒颁富铻㈠箷銆嶃€?            </p>
+            <div class="margin-top">
+              <button type="button" id="close-about-btn" class="btn-in-box">
+                <span class="text-close">Close</span
+                ><span class="text-play hidden">Start</span>
+              </button>
+            </div>
+            <div class="for-margin"></div>
+          </div>
+        </div>
+        <div class="fade-in-box notice hidden" id="notice-box-1">
+          <p>
+            閬婃埐鍒嗘暩鐒℃硶瑷畾鎴?            <span id="winning-score-in-notice-box-1"></span> 鍒嗭紝鍥犵偤
+            姝ゅ垎鏁稿凡鏂煎厛鍓嶉仈鍒?          </p>
+          <button type="button" id="notice-ok-btn-1" class="btn-in-box">
+            OK
+          </button>
+        </div>
+        <div class="fade-in-box notice hidden" id="notice-box-2">
+          <p>
+            鍦ㄧ反缈掓ā寮忎腑涓︽矑鏈夊垎鏁歌ō瀹氥€?<br />
+            浣犲彲浠ュ湪
+            <span class="no_wrap">"閬搁爡 &rarr; 绶寸繏妯″紡 &rarr; 闂?</span>.
+            闂滈枆绶寸繏妯″紡
+          </p>
+          <button type="button" id="notice-ok-btn-2" class="btn-in-box">
+            OK
+          </button>
+        </div>
+        <div class="fade-in-box loading hidden" id="loading-box">
+          <div>
+            <p>杓夊叆閬婃埐璩囨簮涓?..</p>
+            <div id="progress-bar-border">
+              <div id="progress-bar" style="width: 0%"></div>
+            </div>
+          </div>
+        </div>
+        <div
+          class="fade-in-box update hidden"
+          id="update-notification-message-box"
+        >
+          鏈夋柊鐗堟湰閲嬪嚭銆傛槸鍚︽洿鏂帮紵
+          <div>
+            <button type="button" class="update" id="update-now">
+              鐝惧湪鏇存柊 (灏囨渻澶卞幓鐣跺墠鐨勯亰鎴茬媭鎱?
+            </button>
+            <button type="button" class="update" id="later">
+              寰呮渻鍐嶈 (鏂肩€忚鍣ㄩ噸闁嬪緦鑷嫊鏇存柊)
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module">
+      /*
+       * Register service worker with some configuration for service worker update notice.
+       * Major parts of the code below are copied from: https://developers.google.com/web/tools/workbox/guides/advanced-recipes
+       */
+      import { Workbox } from 'https://storage.googleapis.com/workbox-cdn/releases/5.0.0/workbox-window.prod.mjs';
+
+      function createUpdateUIPrompt(callback) {
+        const notificationBox = document.getElementById(
+          'update-notification-message-box'
+        );
+        const elementList = document.getElementsByClassName('fade-in-box');
+        const updateNowButton = document.getElementById('update-now');
+        const laterButton = document.getElementById('later');
+
+        updateNowButton.addEventListener('click', function () {
+          notificationBox.classList.add('hidden');
+          callback.onAccept();
+        });
+        laterButton.addEventListener('click', function () {
+          notificationBox.classList.add('hidden');
+        });
+
+        for (const element of elementList) {
+          element.classList.add('hidden');
+        }
+        notificationBox.classList.remove('hidden');
+      }
+
+      if ('serviceWorker' in navigator) {
+        const wb = new Workbox('../sw.js');
+        // Add an event listener to detect when the registered
+        // service worker has installed but is waiting to activate.
+        wb.addEventListener('waiting', (event) => {
+          const prompt = createUpdateUIPrompt({
+            onAccept: async () => {
+              // Assuming the user accepted the update, set up a listener
+              // that will reload the page as soon as the previously waiting
+              // service worker has taken control.
+              wb.addEventListener('controlling', (event) => {
+                window.location.reload();
+              });
+              // Send a message telling the service worker to skip waiting.
+              // This will trigger the `controlling` event handler above.
+              wb.messageSW({ type: 'SKIP_WAITING' });
+            },
+          });
+        });
+
+        wb.register();
+      }
+    </script>
+  </body>
+</html>
+

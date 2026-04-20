@@ -2,38 +2,34 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import { ChevronDown, Download, Languages, Paintbrush, Save, Search, Trash2, X } from "lucide-react";
+import { ChevronDown, Download, Languages, ListPlus, Paintbrush, Search, Trash2, X } from "lucide-react";
 import { DEFAULT_STATE, THEME_PRESETS, COLOR_SWATCHES, FONT_FAMILIES, FONT_COLOR_SWATCHES, MIN_MAP_ZOOM, MAX_MAP_ZOOM, REGION_EN_MAP, PROVINCE_INFO, WORLD_LABEL_PRIORITY, WORLD_DATA_SOURCE_TEXT, buildMapGeoJson, buildWorldGeoJson, getLocalizedWorldCapital, getWorldCountryCanonicalName, getWorldCountryIdByName, getWorldCountryProfile, getWorldCountryZhName, getWorldPointTimeInfo, loadChinaGeoJsonRemote, loadWorldGeoJsonRemote } from "./super-map/constants";
-import { LabelLanguage, MapScope, PersistedState } from "./super-map/types";
+import { loadEchartsGlobal as loadSharedEchartsGlobal } from "./super-map/echarts-loader";
+import { downloadChartImage } from "./super-map/download-chart-image";
+import { LabelLanguage, MapScope, PersistedState, MarineLabel, SearchItem, WorldFocusRegion, WorldRuntimeMeta } from "./super-map/types";
+import { WORLD_COVERAGE_REGIONS, WORLD_FOCUS_REGIONS } from "./super-map/world-region-options";
+import { useSuperMapFocusActions } from "./super-map/useSuperMapFocusActions";
+import { useSuperMapResetAction } from "./super-map/useSuperMapResetAction";
+import { useSuperMapThemeActions } from "./super-map/useSuperMapThemeActions";
+import { useWorldFocusRegionSwitch } from "./super-map/useWorldFocusRegionSwitch";
+import { useWorldCoverageStats } from "./super-map/useWorldCoverageStats";
+import { useWorldMapData } from "./super-map/useWorldMapData";
 import { ZoomControl } from "./super-map/ZoomControl";
 import { ProvinceInfoCard } from "./super-map/ProvinceInfoCard";
-import { AuthModal } from "./AuthModal";
+import { computeWorldFocusCamera, getFeatureAnchor, getWorldFeaturesByRegion, hexToRgba as toRgba, normalizeName as normalizeWorldName, WORLD_REGION_CAMERA } from "./super-map/world-utils";
+import { buildChinaBatchAliasMap, buildWorldBatchAliasMap, createScopeHint, createScopeSummaryTitle, parseBatchTokens, resolveBatchSelection } from "./super-map/batch-select";
 
 type SuperMapModalProps = {
   isOpen: boolean;
   onClose: () => void;
   userId?: string | number;
+  onReady?: () => void;
 };
 
-function hexToRgba(hex: string, alpha: number) {
-  const normalized = hex.replace("#", "");
-  const fullHex =
-    normalized.length === 3
-      ? normalized
-          .split("")
-          .map((char) => `${char}${char}`)
-          .join("")
-      : normalized;
-  const int = parseInt(fullHex, 16);
-  const r = (int >> 16) & 255;
-  const g = (int >> 8) & 255;
-  const b = int & 255;
-  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-}
-
-function normalizeName(name: string) {
-  return name.toLowerCase().replace(/[.\-,'’()]/g, " ").replace(/\s+/g, " ").trim();
-}
+const WHEEL_ZOOM_STEP = 1.02;
+const WHEEL_ZOOM_THROTTLE_MS = 32;
+const MOBILE_ROAM_LABEL_RESTORE_MS = 180;
+type SearchItemType = SearchItem["type"];
 
 function formatPopulationByLang(value: number, language: LabelLanguage) {
   if (language === "en") return `${Math.round(value).toLocaleString()}`;
@@ -47,208 +43,6 @@ function formatAreaByLang(value: number, language: LabelLanguage) {
   if (value >= 10000) return `${(value / 10000).toFixed(2)}万 km²`;
   return `${Math.round(value)} km²`;
 }
-
-type WorldRuntimeMeta = {
-  zhName?: string;
-  capitalEn?: string;
-  capitalZh?: string;
-  population?: number;
-  area?: number;
-  iso?: string;
-  region?: string;
-};
-
-type WorldFocusRegion = "ALL" | "Africa" | "Asia" | "Europe" | "NorthAmerica" | "SouthAmerica" | "Oceania";
-type MarineLabelKind = "ocean" | "strait";
-type MarineLabel = {
-  name: string;
-  coord: [number, number];
-  kind: MarineLabelKind;
-  scopes: WorldFocusRegion[];
-  minZoom?: number;
-  maxZoom?: number;
-  rotation?: number;
-};
-type SearchItemType = "china_region" | "world_country" | "world_capital" | "marine";
-type SearchItem = {
-  key: string;
-  label: string;
-  type: SearchItemType;
-  targetName: string;
-  targetScope: MapScope;
-  coord: [number, number] | null;
-};
-
-const SOUTH_AMERICA_COUNTRIES = new Set([
-  "Argentina",
-  "Bolivia",
-  "Brazil",
-  "Chile",
-  "Colombia",
-  "Ecuador",
-  "Guyana",
-  "Paraguay",
-  "Peru",
-  "Suriname",
-  "Uruguay",
-  "Venezuela",
-  "Falkland Islands",
-  "French Guiana"
-]);
-
-const NORTH_AMERICA_COUNTRIES = new Set([
-  "Canada",
-  "United States of America",
-  "Mexico",
-  "Greenland",
-  "Guatemala",
-  "Belize",
-  "Honduras",
-  "El Salvador",
-  "Nicaragua",
-  "Costa Rica",
-  "Panama",
-  "Cuba",
-  "Jamaica",
-  "Haiti",
-  "Dominican Republic",
-  "The Bahamas",
-  "Trinidad and Tobago",
-  "Barbados",
-  "Saint Lucia",
-  "Antigua and Barbuda",
-  "Dominica",
-  "Saint Vincent and the Grenadines",
-  "Grenada",
-  "Puerto Rico"
-]);
-
-function getWorldFeaturesByRegion(region: WorldFocusRegion, sourceGeoJson: any, worldMetaByName: Record<string, WorldRuntimeMeta>) {
-  const features = Array.isArray(sourceGeoJson?.features) ? sourceGeoJson.features : [];
-  if (region === "ALL") return features;
-  const primaryMatches = features.filter((feature: any) => {
-    const rawName = String(feature?.properties?.name || "");
-    const canonicalName = getWorldCountryCanonicalName(rawName);
-    if (region === "NorthAmerica") return NORTH_AMERICA_COUNTRIES.has(canonicalName);
-    if (region === "SouthAmerica") return SOUTH_AMERICA_COUNTRIES.has(canonicalName);
-    const regionRaw = String(
-      worldMetaByName[normalizeName(canonicalName)]?.region ||
-        worldMetaByName[normalizeName(rawName)]?.region ||
-        ""
-    );
-    const normalizedRegion = regionRaw === "Americas" ? "Americas" : regionRaw;
-    return normalizedRegion === region;
-  });
-  if (primaryMatches.length > 0) return primaryMatches;
-  if (Object.keys(worldMetaByName).length > 0) return primaryMatches;
-  const fallbackBounds: Record<Exclude<WorldFocusRegion, "ALL">, { lng: [number, number]; lat: [number, number] }> = {
-    Africa: { lng: [-25, 60], lat: [-38, 38] },
-    Asia: { lng: [25, 180], lat: [-12, 80] },
-    Europe: { lng: [-30, 65], lat: [32, 73] },
-    NorthAmerica: { lng: [-170, -15], lat: [5, 84] },
-    SouthAmerica: { lng: [-93, -30], lat: [-58, 16] },
-    Oceania: { lng: [110, 180], lat: [-55, 10] }
-  };
-  const scope = fallbackBounds[region];
-  return features.filter((feature: any) => {
-    const cp = feature?.properties?.cp;
-    if (!Array.isArray(cp) || cp.length < 2) return false;
-    const lng = Number(cp[0]);
-    const lat = Number(cp[1]);
-    if (!Number.isFinite(lng) || !Number.isFinite(lat)) return false;
-    return lng >= scope.lng[0] && lng <= scope.lng[1] && lat >= scope.lat[0] && lat <= scope.lat[1];
-  });
-}
-
-function extractCoordinates(geometry: any, collector: [number, number][]) {
-  const walk = (value: any) => {
-    if (!Array.isArray(value) || value.length === 0) return;
-    if (typeof value[0] === "number" && typeof value[1] === "number") {
-      collector.push([value[0], value[1]]);
-      return;
-    }
-    value.forEach((item) => walk(item));
-  };
-  walk(geometry?.coordinates);
-}
-
-function getFeatureAnchor(feature: any): [number, number] | null {
-  const cp = feature?.properties?.cp;
-  if (
-    Array.isArray(cp) &&
-    cp.length >= 2 &&
-    Number.isFinite(Number(cp[0])) &&
-    Number.isFinite(Number(cp[1]))
-  ) {
-    return [Number(cp[0]), Number(cp[1])];
-  }
-  const points: [number, number][] = [];
-  extractCoordinates(feature?.geometry, points);
-  if (points.length === 0) return null;
-  let sumLng = 0;
-  let sumLat = 0;
-  points.forEach((point) => {
-    sumLng += point[0];
-    sumLat += point[1];
-  });
-  return [sumLng / points.length, sumLat / points.length];
-}
-
-function computeWorldFocusCamera(
-  features: any[],
-  fallback: { center: [number, number]; zoom: number },
-  minZoom: number,
-  maxZoom: number
-) {
-  if (!Array.isArray(features) || features.length === 0) return fallback;
-  const points: [number, number][] = [];
-  features.forEach((feature) => {
-    const anchor = getFeatureAnchor(feature);
-    if (anchor) points.push(anchor);
-  });
-  if (points.length === 0) return fallback;
-  const latitudes = points.map((point) => point[1]).filter((value) => Number.isFinite(value));
-  if (latitudes.length === 0) return fallback;
-  const lngValues = points.map((point) => point[0]).filter((value) => Number.isFinite(value));
-  if (lngValues.length === 0) return fallback;
-
-  const lngMinA = Math.min(...lngValues);
-  const lngMaxA = Math.max(...lngValues);
-  const lngSpanA = Math.max(1, lngMaxA - lngMinA);
-
-  const shiftedLng = lngValues.map((value) => (value < 0 ? value + 360 : value));
-  const lngMinB = Math.min(...shiftedLng);
-  const lngMaxB = Math.max(...shiftedLng);
-  const lngSpanB = Math.max(1, lngMaxB - lngMinB);
-  const useShifted = lngSpanB < lngSpanA;
-
-  const lngMin = useShifted ? lngMinB : lngMinA;
-  const lngMax = useShifted ? lngMaxB : lngMaxA;
-  const latMin = Math.min(...latitudes);
-  const latMax = Math.max(...latitudes);
-  const lngSpan = Math.max(6, lngMax - lngMin);
-  const latSpan = Math.max(5, latMax - latMin);
-  const centerLngRaw = (lngMin + lngMax) / 2;
-  const centerLng = useShifted && centerLngRaw > 180 ? centerLngRaw - 360 : centerLngRaw;
-  const centerLat = (latMin + latMax) / 2;
-  const zoomByLng = 360 / (lngSpan * 1.25);
-  const zoomByLat = 180 / (latSpan * 1.4);
-  const zoom = Math.max(minZoom, Math.min(maxZoom, Number(Math.min(zoomByLng, zoomByLat).toFixed(2))));
-  return {
-    center: [Number(centerLng.toFixed(2)), Number(centerLat.toFixed(2))] as [number, number],
-    zoom
-  };
-}
-
-const WORLD_REGION_CAMERA: Record<WorldFocusRegion, { center: [number, number]; zoom: number }> = {
-  ALL: { center: [0, 10], zoom: 1 },
-  Africa: { center: [20, 5], zoom: 1.55 },
-  Asia: { center: [95, 34], zoom: 1.45 },
-  Europe: { center: [15, 52], zoom: 2.2 },
-  NorthAmerica: { center: [-98, 45], zoom: 1.5 },
-  SouthAmerica: { center: [-60, -17], zoom: 1.75 },
-  Oceania: { center: [140, -22], zoom: 1.85 }
-};
 
 const MARINE_LABELS: MarineLabel[] = [
   { name: "太平洋", coord: [165, 8], kind: "ocean", scopes: ["ALL", "Asia", "Oceania"], maxZoom: 3.3 },
@@ -280,51 +74,7 @@ const MARINE_LABELS: MarineLabel[] = [
   { name: "麦哲伦海峡", coord: [-71.4, -53.1], kind: "strait", scopes: ["ALL", "SouthAmerica"], minZoom: 1.2 }
 ];
 
-async function loadEchartsGlobal() {
-  if (typeof window === "undefined") throw new Error("window is undefined");
-  const existing = (window as any).echarts;
-  if (existing?.init) return existing;
-  const candidates = [
-    "https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js",
-    "https://unpkg.com/echarts@5.6.0/dist/echarts.min.js",
-    "https://cdn.bootcdn.net/ajax/libs/echarts/5.6.0/echarts.min.js"
-  ];
-  for (let index = 0; index < candidates.length; index += 1) {
-    const scriptId = `echarts-cdn-script-${index}`;
-    const src = candidates[index];
-    const current = document.getElementById(scriptId) as HTMLScriptElement | null;
-    try {
-      if (!current) {
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement("script");
-          script.id = scriptId;
-          script.src = src;
-          script.async = true;
-          script.onload = () => resolve();
-          script.onerror = () => reject(new Error(`failed to load echarts from ${src}`));
-          document.head.appendChild(script);
-        });
-      } else if (!(window as any).echarts?.init) {
-        await new Promise<void>((resolve, reject) => {
-          current.addEventListener("load", () => resolve(), { once: true });
-          current.addEventListener("error", () => reject(new Error(`failed to load echarts from ${src}`)), { once: true });
-          window.setTimeout(() => {
-            if ((window as any).echarts?.init) resolve();
-            else reject(new Error(`timeout loading echarts from ${src}`));
-          }, 3500);
-        });
-      }
-      if ((window as any).echarts?.init) break;
-    } catch {
-    }
-  }
-  const echarts = (window as any).echarts;
-  if (!echarts?.init) throw new Error("echarts unavailable");
-  return echarts;
-}
-
-
-export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
+export function SuperMapModal({ isOpen, onClose, userId, onReady }: SuperMapModalProps) {
   const [mounted, setMounted] = useState(false);
   const [selectedNames, setSelectedNames] = useState<string[]>([]);
   const [labelLanguage, setLabelLanguage] = useState<LabelLanguage>("zh");
@@ -348,19 +98,29 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
   const [showWorldRegionMenu, setShowWorldRegionMenu] = useState(false);
   const [showSearchPanel, setShowSearchPanel] = useState(false);
   const [searchKeyword, setSearchKeyword] = useState("");
+  const [showBatchPanel, setShowBatchPanel] = useState(false);
+  const [batchInput, setBatchInput] = useState("");
+  const [batchAppendMode, setBatchAppendMode] = useState(false);
+  const [batchResult, setBatchResult] = useState<{
+    scope: MapScope;
+    matched: string[];
+    missing: string[];
+    mode: "replace" | "append";
+    totalSelected: number;
+  } | null>(null);
   const [activeMarineLabelName, setActiveMarineLabelName] = useState<string | null>(null);
   const [isMobile, setIsMobile] = useState(false);
+  const [isWeChatBrowser, setIsWeChatBrowser] = useState(false);
+  const [mobileRoaming, setMobileRoaming] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [loadingChinaGeo, setLoadingChinaGeo] = useState(true);
+  const [loadingWorldGeo, setLoadingWorldGeo] = useState(true);
+  const [loadingMapEngine, setLoadingMapEngine] = useState(false);
   const [timeTick, setTimeTick] = useState(Date.now());
-  const [worldGdpByName, setWorldGdpByName] = useState<Record<string, number>>({});
-  const [worldMetaByName, setWorldMetaByName] = useState<Record<string, WorldRuntimeMeta>>({});
-  const [worldMetaByIso, setWorldMetaByIso] = useState<Record<string, WorldRuntimeMeta>>({});
   const [worldCoverageRegion, setWorldCoverageRegion] = useState("ALL");
   const [worldFocusRegion, setWorldFocusRegion] = useState<WorldFocusRegion>("ALL");
   const [showMarineLabels, setShowMarineLabels] = useState(DEFAULT_STATE.showMarineLabels ?? true);
   const [showWorldCoveragePanel, setShowWorldCoveragePanel] = useState(false);
-  const [showAuthModal, setShowAuthModal] = useState(false);
-  const [authHint, setAuthHint] = useState("登录后可高亮与编辑地图样式");
   const [chartVersion, setChartVersion] = useState(0);
   const chartHostRef = useRef<HTMLDivElement | null>(null);
   const chartRef = useRef<any>(null);
@@ -368,7 +128,12 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
   const toolbarRef = useRef<HTMLDivElement | null>(null);
   const worldCoveragePanelRef = useRef<HTMLDivElement | null>(null);
   const searchPanelRef = useRef<HTMLDivElement | null>(null);
+  const batchPanelRef = useRef<HTMLDivElement | null>(null);
   const pendingFocusRef = useRef<{ scope: MapScope; center: [number, number]; zoom: number; selectedName: string | null } | null>(null);
+  const lastWheelZoomAtRef = useRef(0);
+  const mobileRoamEndTimerRef = useRef<number | null>(null);
+  const hasReportedReadyRef = useRef(false);
+  const { worldGdpByName, worldMetaByName, worldMetaByIso } = useWorldMapData({ isOpen, mapScope });
 
   const storageKey = useMemo(() => `super_map_state_${userId || "guest"}_${mapScope}`, [userId, mapScope]);
   const selectedSet = useMemo(() => new Set(selectedNames), [selectedNames]);
@@ -417,6 +182,24 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
       rotation: label.rotation || 0
     }));
   }, [showMarineLabels, mapScope, worldFocusRegion, mapZoom, isMobile, activeMarineLabelName]);
+  const resourceLoadingMessage = useMemo(() => {
+    if (!isOpen) return null;
+    if (loadingMapEngine) return "地图引擎加载中，请稍候…";
+    if (mapScope === "china" && (loadingChinaGeo || !chinaReady)) return "中国地图加载中，请稍候…";
+    if (mapScope === "world" && (loadingWorldGeo || !activeWorldReady)) return "世界地图加载中，请稍候…";
+    return null;
+  }, [isOpen, loadingMapEngine, mapScope, loadingChinaGeo, chinaReady, loadingWorldGeo, activeWorldReady]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      hasReportedReadyRef.current = false;
+      return;
+    }
+    if (resourceLoadingMessage) return;
+    if (hasReportedReadyRef.current) return;
+    hasReportedReadyRef.current = true;
+    onReady?.();
+  }, [isOpen, resourceLoadingMessage, onReady]);
   const marineSearchItems = useMemo<SearchItem[]>(
     () =>
       MARINE_LABELS.map((item) => ({
@@ -449,13 +232,13 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     worldFeatures.forEach((feature: any) => {
       const rawName = String(feature?.properties?.name || "");
       const canonical = getWorldCountryCanonicalName(rawName);
-      const normalizedKey = normalizeName(canonical);
+      const normalizedKey = normalizeWorldName(canonical);
       if (worldByCanonical[normalizedKey]) return;
       worldByCanonical[normalizedKey] = { rawName, canonicalName: canonical, coord: getFeatureAnchor(feature) };
     });
     Object.values(worldByCanonical).forEach((item) => {
       const zhName =
-        worldMetaByName[normalizeName(item.canonicalName)]?.zhName ||
+        worldMetaByName[normalizeWorldName(item.canonicalName)]?.zhName ||
         getWorldCountryZhName(item.canonicalName) ||
         item.canonicalName;
       items.push({
@@ -467,7 +250,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
         coord: item.coord
       });
       const profile = getWorldCountryProfile(item.canonicalName);
-      const capitalEn = worldMetaByName[normalizeName(item.canonicalName)]?.capitalEn || profile.capital;
+      const capitalEn = worldMetaByName[normalizeWorldName(item.canonicalName)]?.capitalEn || profile.capital;
       const capitalZh = getLocalizedWorldCapital(capitalEn, "zh");
       if (capitalZh && capitalZh !== "待补充") {
         items.push({
@@ -511,12 +294,82 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
       })
       .slice(0, 10);
   }, [searchItems, normalizedSearchKeyword]);
-  const ensureCanEdit = useCallback((hint: string) => {
-    if (userId) return true;
-    setAuthHint(hint);
-    setShowAuthModal(true);
-    return false;
-  }, [userId]);
+  const chinaBatchAliasMap = useMemo(
+    () => buildChinaBatchAliasMap({ mapGeoJson, regionEnMap: REGION_EN_MAP }),
+    [mapGeoJson]
+  );
+  const worldBatchAliasMap = useMemo(
+    () => buildWorldBatchAliasMap({ activeWorldGeoJson, worldMetaByName }),
+    [activeWorldGeoJson, worldMetaByName]
+  );
+  const applyBatchSelection = useCallback(() => {
+    const tokens = parseBatchTokens(batchInput);
+    const resolver = mapScope === "china" ? chinaBatchAliasMap : worldBatchAliasMap;
+    const { matched, missing } = resolveBatchSelection(tokens, resolver);
+    const nextSelected = batchAppendMode
+      ? Array.from(new Set([...selectedNames, ...matched]))
+      : matched;
+    setSelectedNames(nextSelected);
+    setActiveRegionName(nextSelected.length > 0 ? nextSelected[0] : null);
+    setBatchResult({
+      scope: mapScope,
+      matched,
+      missing,
+      mode: batchAppendMode ? "append" : "replace",
+      totalSelected: nextSelected.length
+    });
+    setShowBatchPanel(false);
+  }, [batchInput, mapScope, chinaBatchAliasMap, worldBatchAliasMap, batchAppendMode, selectedNames]);
+  const ensureCanEdit = useCallback((_hint?: string) => true, []);
+  const { applyTheme: applyThemeAction, applyColor: applyColorAction } = useSuperMapThemeActions({
+    ensureCanEdit,
+    setThemeId,
+    setHighlightColor,
+    setBaseColor,
+    setBorderColor,
+    setHoverColor
+  });
+  const resetAllAction = useSuperMapResetAction({
+    ensureCanEdit,
+    mapScope,
+    worldFocusRegion,
+    worldFocusCamera,
+    effectiveMinZoom,
+    effectiveMaxZoom,
+    isMobile,
+    chartRef,
+    setSelectedNames,
+    setLabelLanguage,
+    setHighlightColor,
+    setBaseColor,
+    setBorderColor,
+    setHoverColor,
+    setFontColor,
+    setFontSize,
+    setFontWeight,
+    setFontFamily,
+    setThemeId,
+    setShowMarineLabels,
+    setMapZoom,
+    setWorldCenterLng,
+    setWorldCenterLat,
+    setActivePanel
+  });
+  const { focusChinaRegion, focusWorldTarget, applySearchResult } = useSuperMapFocusActions({
+    pendingFocusRef,
+    setActiveMarineLabelName,
+    setMapScope,
+    setMapZoom,
+    setWorldFocusRegion,
+    setWorldCenterLng,
+    setWorldCenterLat,
+    setActiveRegionName,
+    setSelectedNames,
+    setShowWorldCoveragePanel,
+    setShowWorldRegionMenu,
+    setShowScopeMenu,
+    setShowSearchPanel
+  });
   const switchMapScope = useCallback((scope: MapScope) => {
     if (scope === "china") {
       setMapScope("china");
@@ -540,47 +393,6 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     setShowWorldRegionMenu(false);
     setShowWorldCoveragePanel(true);
   }, []);
-  const focusChinaRegion = useCallback((name: string, coord: [number, number] | null) => {
-    const zoom = 2;
-    const center = coord || [104, 36];
-    pendingFocusRef.current = { scope: "china", center, zoom, selectedName: name };
-    setActiveMarineLabelName(null);
-    setMapScope("china");
-    setMapZoom(zoom);
-    setShowWorldRegionMenu(false);
-    setShowScopeMenu(false);
-    setShowSearchPanel(false);
-  }, []);
-  const focusWorldTarget = useCallback((name: string, coord: [number, number] | null, selectedName: string | null) => {
-    const zoom = 2;
-    const center = coord || [0, 10];
-    pendingFocusRef.current = { scope: "world", center, zoom, selectedName };
-    setMapScope("world");
-    setWorldFocusRegion("ALL");
-    setWorldCenterLng(center[0]);
-    setWorldCenterLat(center[1]);
-    setMapZoom(zoom);
-    setActiveRegionName(selectedName ? name : null);
-    setSelectedNames(selectedName ? [selectedName] : []);
-    setShowWorldCoveragePanel(true);
-    setShowWorldRegionMenu(false);
-    setShowScopeMenu(false);
-    setShowSearchPanel(false);
-  }, []);
-  const applySearchResult = useCallback((item: SearchItem) => {
-    setActiveMarineLabelName(null);
-    if (item.targetScope === "china") {
-      focusChinaRegion(item.targetName, item.coord);
-      return;
-    }
-    if (item.type === "marine") {
-      setActiveMarineLabelName(item.targetName);
-      focusWorldTarget(item.targetName, item.coord, null);
-      return;
-    }
-    focusWorldTarget(item.targetName, item.coord, item.targetName);
-  }, [focusChinaRegion, focusWorldTarget]);
-
   useEffect(() => {
     setMounted(true);
   }, []);
@@ -600,6 +412,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
   useEffect(() => {
     let cancelled = false;
     const loadGeo = async () => {
+      setLoadingChinaGeo(true);
       try {
         const china = await loadChinaGeoJsonRemote();
         if (!cancelled) {
@@ -609,7 +422,10 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
         if (!cancelled) {
           setNotice(`中国地图数据加载失败：${String(error?.message || "unknown error")}`);
         }
+      } finally {
+        if (!cancelled) setLoadingChinaGeo(false);
       }
+      setLoadingWorldGeo(true);
       try {
         const world = await loadWorldGeoJsonRemote();
         if (!cancelled) {
@@ -619,6 +435,8 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
         if (!cancelled) {
           setNotice(`世界地图数据加载失败：${String(error?.message || "unknown error")}`);
         }
+      } finally {
+        if (!cancelled) setLoadingWorldGeo(false);
       }
     };
     loadGeo();
@@ -630,9 +448,20 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
   useEffect(() => {
     const updateDevice = () => setIsMobile(window.innerWidth < 768);
     updateDevice();
+    setIsWeChatBrowser(/MicroMessenger/i.test(window.navigator.userAgent || ""));
     window.addEventListener("resize", updateDevice);
     return () => window.removeEventListener("resize", updateDevice);
   }, []);
+  useEffect(() => {
+    if (!isOpen) return;
+    return () => {
+      if (mobileRoamEndTimerRef.current) {
+        window.clearTimeout(mobileRoamEndTimerRef.current);
+        mobileRoamEndTimerRef.current = null;
+      }
+      setMobileRoaming(false);
+    };
+  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -644,10 +473,20 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
       if (searchPanelRef.current && !searchPanelRef.current.contains(event.target as Node)) {
         setShowSearchPanel(false);
       }
+      if (batchPanelRef.current && !batchPanelRef.current.contains(event.target as Node)) {
+        setShowBatchPanel(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [isOpen]);
+  useEffect(() => {
+    if (!isOpen) return;
+    setShowBatchPanel(false);
+    setBatchResult(null);
+    setBatchInput("");
+    setBatchAppendMode(false);
+  }, [isOpen, mapScope]);
 
   useEffect(() => {
     if (!activeMarineLabelName) return;
@@ -670,152 +509,6 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     const timer = window.setInterval(() => setTimeTick(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [isOpen, mapScope]);
-
-  useEffect(() => {
-    if (!isOpen || mapScope !== "world") return;
-    if (Object.keys(worldMetaByName).length > 0 && Object.keys(worldGdpByName).length > 0) return;
-    let cancelled = false;
-    const fetchSnapshot = async () => {
-      try {
-        const response = await fetch(`/geo/world-meta.snapshot.json?t=${Date.now()}`);
-        if (!response.ok) return;
-        const snapshot = await response.json();
-        if (cancelled) return;
-        const metaByName = snapshot?.worldMetaByName || {};
-        const metaByIso = snapshot?.worldMetaByIso || {};
-        const gdpByName = snapshot?.worldGdpByName || {};
-        if (Object.keys(metaByName).length > 0 && Object.keys(worldMetaByName).length === 0) {
-          setWorldMetaByName(metaByName);
-        }
-        if (Object.keys(metaByIso).length > 0 && Object.keys(worldMetaByIso).length === 0) {
-          setWorldMetaByIso(metaByIso);
-        }
-        if (Object.keys(gdpByName).length > 0 && Object.keys(worldGdpByName).length === 0) {
-          setWorldGdpByName(gdpByName);
-        }
-      } catch {
-      }
-    };
-    fetchSnapshot();
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, mapScope, worldMetaByName, worldMetaByIso, worldGdpByName]);
-
-  useEffect(() => {
-    if (!isOpen || mapScope !== "world") return;
-    if (Object.keys(worldGdpByName).length > 0) return;
-    let cancelled = false;
-    const fetchGdp = async () => {
-      try {
-        const response = await fetch(
-          "https://api.worldbank.org/v2/country/all/indicator/NY.GDP.MKTP.CD?format=json&per_page=20000"
-        );
-        const payload = await response.json();
-        const rows = Array.isArray(payload) ? payload[1] : [];
-        const byName: Record<string, { year: number; value: number }> = {};
-        (rows || []).forEach((row: any) => {
-          const name = String(row?.country?.value || "").trim();
-          const iso = String(row?.country?.id || "").toUpperCase();
-          const value = Number(row?.value);
-          const year = Number(row?.date || 0);
-          if (!name || Number.isNaN(value) || value <= 0) return;
-          const keys = [normalizeName(getWorldCountryCanonicalName(name))];
-          if (iso.length === 2) keys.push(`__iso_${iso}`);
-          keys.forEach((key) => {
-            const prev = byName[key];
-            if (!prev || year > prev.year) {
-              byName[key] = { year, value };
-            }
-          });
-        });
-        if (cancelled) return;
-        const result: Record<string, number> = {};
-        Object.entries(byName).forEach(([key, row]) => {
-          result[key] = row.value;
-        });
-        setWorldGdpByName(result);
-      } catch {
-      }
-    };
-    fetchGdp();
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, mapScope, worldGdpByName]);
-
-  useEffect(() => {
-    if (!isOpen || mapScope !== "world") return;
-    if (Object.keys(worldMetaByName).length > 0) return;
-    let cancelled = false;
-    const fetchWorldMeta = async () => {
-      const urls = [
-        "https://restcountries.com/v3.1/all?fields=name,translations,capital,population,area,cca2,altSpellings,region",
-        "https://restcountries.com/v2/all?fields=name,translations,capital,population,area,alpha2Code,region",
-        "https://cdn.jsdelivr.net/gh/mledoze/countries@master/countries.json"
-      ];
-      const mergeEntity = (prev: WorldRuntimeMeta | undefined, next: WorldRuntimeMeta): WorldRuntimeMeta => ({
-        zhName: prev?.zhName || next.zhName,
-        capitalEn: prev?.capitalEn || next.capitalEn,
-        capitalZh: prev?.capitalZh || next.capitalZh,
-        population: prev?.population || next.population,
-        area: prev?.area || next.area,
-        iso: prev?.iso || next.iso,
-        region: prev?.region || next.region
-      });
-      const byName: Record<string, WorldRuntimeMeta> = {};
-      const byIso: Record<string, WorldRuntimeMeta> = {};
-      for (const url of urls) {
-        try {
-          const response = await fetch(url);
-          if (!response.ok) continue;
-          const rows = await response.json();
-          if (!Array.isArray(rows) || rows.length === 0) continue;
-          rows.forEach((row: any) => {
-            const hasV3Shape = typeof row?.name === "object" || !!row?.cca2;
-            const enName = String(hasV3Shape ? row?.name?.common : row?.name || "").trim();
-            const official = String(hasV3Shape ? row?.name?.official : "").trim();
-            const iso = String(hasV3Shape ? row?.cca2 : row?.alpha2Code || "").toUpperCase();
-            const capitalEn = String(hasV3Shape ? row?.capital?.[0] : row?.capital || "").trim();
-            const translations = row?.translations || {};
-            const zhName = String(
-              (translations?.zho?.common || translations?.zho?.official || translations?.zh || translations?.cmn || "") || ""
-            ).trim();
-            const population = Number(row?.population);
-            const area = Number(row?.area);
-            const region = String(row?.region || "").trim();
-            const entity = {
-              zhName: zhName || undefined,
-              capitalEn: capitalEn || undefined,
-              capitalZh: capitalEn ? getLocalizedWorldCapital(capitalEn, "zh") : undefined,
-              population: Number.isFinite(population) ? population : undefined,
-              area: Number.isFinite(area) ? area : undefined,
-              iso: iso || undefined,
-              region: region || undefined
-            };
-            const nativeNames = Object.values(row?.name?.nativeName || {}).flatMap((item: any) => [item?.common, item?.official]);
-            const names = [enName, official, ...(Array.isArray(row?.altSpellings) ? row.altSpellings : []), ...nativeNames]
-              .map((name) => String(name || "").trim())
-              .filter(Boolean);
-            names.forEach((name) => {
-              const key = normalizeName(getWorldCountryCanonicalName(name));
-              byName[key] = mergeEntity(byName[key], entity);
-            });
-            if (iso.length === 2) byIso[iso] = mergeEntity(byIso[iso], entity);
-          });
-        } catch {
-        }
-      }
-      if (!cancelled && Object.keys(byName).length > 0) {
-        setWorldMetaByName(byName);
-        setWorldMetaByIso(byIso);
-      }
-    };
-    fetchWorldMeta();
-    return () => {
-      cancelled = true;
-    };
-  }, [isOpen, mapScope, worldMetaByName]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -910,20 +603,26 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     let zr: any = null;
     const bootstrap = async () => {
       let echarts: any = null;
+      if (!disposed) setLoadingMapEngine(true);
       try {
-        echarts = await loadEchartsGlobal();
+        echarts = await loadSharedEchartsGlobal();
       } catch (error: any) {
+        if (!disposed) setLoadingMapEngine(false);
         if (!disposed) {
           const reason = String(error?.message || "");
           if (reason) {
             setNotice(`地图依赖加载失败：${reason}`);
           } else {
-            setNotice("地图依赖加载失败，请刷新后重试");
+            setNotice("地图依赖加载失败");
           }
         }
         return;
       }
-      if (disposed || !chartHostRef.current) return;
+      if (disposed || !chartHostRef.current) {
+        setLoadingMapEngine(false);
+        return;
+      }
+      setLoadingMapEngine(false);
       echarts.registerMap("china-super-map", mapGeoJson as any);
       echarts.registerMap(activeWorldMapName, activeWorldGeoJson as any);
       chart = echarts.init(chartHostRef.current, undefined, { renderer: "canvas" });
@@ -951,6 +650,14 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
         setHoverCoord(null);
       });
       chart.on("georoam", () => {
+        if (isMobile) {
+          if (!mobileRoaming) setMobileRoaming(true);
+          if (mobileRoamEndTimerRef.current) window.clearTimeout(mobileRoamEndTimerRef.current);
+          mobileRoamEndTimerRef.current = window.setTimeout(() => {
+            setMobileRoaming(false);
+            setChartVersion((prev) => prev + 1);
+          }, MOBILE_ROAM_LABEL_RESTORE_MS);
+        }
         const option = chart.getOption() as any;
         const currentZoom = Number(option?.series?.[0]?.zoom);
         if (Number.isNaN(currentZoom)) return;
@@ -990,19 +697,79 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
           setHoverCoord(null);
         }
       };
+      const onMouseWheel = (event: any) => {
+        const nativeEvent = event?.event;
+        if (nativeEvent?.preventDefault) nativeEvent.preventDefault();
+        if (nativeEvent?.stopPropagation) nativeEvent.stopPropagation();
+        if (typeof event?.stop === "function") event.stop();
+
+        const now = Date.now();
+        if (now - lastWheelZoomAtRef.current < WHEEL_ZOOM_THROTTLE_MS) return;
+        lastWheelZoomAtRef.current = now;
+
+        const rawDelta =
+          Number(nativeEvent?.wheelDelta) ||
+          Number(nativeEvent?.deltaY ? -nativeEvent.deltaY : 0) ||
+          Number(event?.wheelDelta) ||
+          0;
+        if (!rawDelta) return;
+
+        const option = chart.getOption() as any;
+        const currentZoom = Number(option?.series?.[0]?.zoom);
+        if (!Number.isFinite(currentZoom)) return;
+
+        const direction = rawDelta > 0 ? 1 : -1;
+        const nextZoom =
+          direction > 0
+            ? currentZoom * WHEEL_ZOOM_STEP
+            : currentZoom / WHEEL_ZOOM_STEP;
+        const clampedZoom = Math.max(
+          effectiveMinZoom,
+          Math.min(effectiveMaxZoom, Number(nextZoom.toFixed(3)))
+        );
+        if (Math.abs(clampedZoom - currentZoom) < 0.001) return;
+
+        chart.setOption({ series: [{ zoom: clampedZoom }] });
+        setMapZoom((prev) => (Math.abs(prev - clampedZoom) > 0.001 ? clampedZoom : prev));
+      };
       zr.on("mousemove", onMouseMove);
+      zr.on("mousewheel", onMouseWheel);
       resizeObserverRef.current.observe(chartHostRef.current);
     };
     bootstrap();
     return () => {
       disposed = true;
+      if (mobileRoamEndTimerRef.current) {
+        window.clearTimeout(mobileRoamEndTimerRef.current);
+        mobileRoamEndTimerRef.current = null;
+      }
       resizeObserverRef.current?.disconnect();
       resizeObserverRef.current = null;
       zr?.off?.("mousemove");
+      zr?.off?.("mousewheel");
       chart?.dispose?.();
       chartRef.current = null;
     };
-  }, [isOpen, mapGeoJson, activeWorldGeoJson, activeWorldMapName, mapScope, ensureCanEdit, chinaReady, activeWorldReady, effectiveMinZoom, effectiveMaxZoom]);
+  }, [isOpen, mapGeoJson, activeWorldGeoJson, activeWorldMapName, mapScope, ensureCanEdit, chinaReady, activeWorldReady, effectiveMinZoom, effectiveMaxZoom, isMobile, mobileRoaming]);
+
+  useEffect(() => {
+    if (!isOpen || !isMobile || !isWeChatBrowser || !chartRef.current) return;
+    const chart = chartRef.current;
+    const refresh = () => {
+      chart.resize();
+      setChartVersion((prev) => prev + 1);
+    };
+    const timer = window.setTimeout(refresh, 80);
+    window.addEventListener("orientationchange", refresh);
+    window.visualViewport?.addEventListener("resize", refresh);
+    window.visualViewport?.addEventListener("scroll", refresh);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener("orientationchange", refresh);
+      window.visualViewport?.removeEventListener("resize", refresh);
+      window.visualViewport?.removeEventListener("scroll", refresh);
+    };
+  }, [isOpen, isMobile, isWeChatBrowser, mapScope]);
 
   useEffect(() => {
     if (!chartRef.current) return;
@@ -1011,12 +778,15 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     if (!Array.isArray((activeGeoJson as any)?.features) || (activeGeoJson as any).features.length === 0) return;
     const forcedWorldLabelNames = new Set(["France", "United Kingdom", "Spain"]);
     const getWorldDisplayName = (name: string, canonicalName: string) => {
-      const runtimeZhName = worldMetaByName[normalizeName(canonicalName)]?.zhName || worldMetaByName[normalizeName(name)]?.zhName;
+      const runtimeZhName = worldMetaByName[normalizeWorldName(canonicalName)]?.zhName || worldMetaByName[normalizeWorldName(name)]?.zhName;
       const zhName = runtimeZhName || getWorldCountryZhName(canonicalName) || getWorldCountryZhName(name);
       return labelLanguage === "zh" ? (zhName || canonicalName) : canonicalName;
     };
     const shouldShowWorldLabel = (name: string, canonicalName: string) => {
       if (labelLanguage === "none") return false;
+      if (isMobile && mobileRoaming) {
+        return selectedSet.has(name) || forcedWorldLabelNames.has(canonicalName);
+      }
       if (mapZoom <= MIN_MAP_ZOOM + 0.05) {
         return selectedSet.has(name) || forcedWorldLabelNames.has(canonicalName);
       }
@@ -1048,7 +818,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     const seriesConfig: any = {
       type: "map",
       map: mapScope === "world" ? activeWorldMapName : "china-super-map",
-      roam: true,
+      roam: "move",
       zoom: mapZoom,
       aspectScale: mapScope === "world" ? 1 : 0.75,
       scaleLimit: {
@@ -1069,6 +839,9 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
             if (!shouldShowWorldLabel(name, canonicalName)) return "";
             return getWorldDisplayName(name, canonicalName);
           }
+          if (isMobile && mobileRoaming) {
+            return selectedSet.has(name) ? (labelLanguage === "zh" ? name : REGION_EN_MAP[name] || name) : "";
+          }
           if (mapZoom <= MIN_MAP_ZOOM + 0.02) {
             if (!selectedSet.has(name)) return "";
           }
@@ -1078,7 +851,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
         }
       },
       labelLayout: {
-        hideOverlap: mapScope === "world" ? worldFocusRegion === "ALL" : true
+        hideOverlap: isMobile ? true : mapScope === "world" ? worldFocusRegion === "ALL" : true
       },
       emphasis: {
         disabled: isMobile,
@@ -1094,7 +867,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
       },
       itemStyle: {
         areaColor: baseColor,
-        borderColor: hexToRgba(borderColor, 0.92),
+        borderColor: toRgba(borderColor, 0.92),
         borderWidth: 0.9,
         borderJoin: "round",
         borderCap: "round"
@@ -1166,120 +939,12 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     chart.setOption({
       graphic: marineGraphicElements
     });
-  }, [chartVersion, selectedSet, labelLanguage, highlightColor, baseColor, borderColor, hoverColor, fontColor, fontSize, fontWeight, fontFamily, isMobile, mapZoom, mapGeoJson, activeWorldGeoJson, activeWorldMapName, mapScope, worldMetaByName, worldFocusRegion, worldCenterLng, worldCenterLat, effectiveMinZoom, effectiveMaxZoom, showMarineLabels, marineLabelData, activeMarineLabelName]);
-
-  const saveProgress = async () => {
-    const payload: PersistedState = {
-      selectedNames,
-      labelLanguage,
-      highlightColor,
-      baseColor,
-      borderColor,
-      hoverColor,
-      fontColor,
-      fontSize,
-      fontWeight,
-      fontFamily,
-      themeId,
-      mapZoom,
-      showMarineLabels
-    };
-    localStorage.setItem(storageKey, JSON.stringify(payload));
-    if (userId) {
-      try {
-        await fetch("/api/assessment/history", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            type: "SUPER_MAP",
-            title: "超级地图进度",
-            result: selectedNames.join(", "),
-            metadata: JSON.stringify(payload)
-          })
-        });
-      } catch {
-      }
-    }
-    setNotice("地图进度已保存");
-    window.setTimeout(() => setNotice(null), 1200);
-  };
+  }, [chartVersion, selectedSet, labelLanguage, highlightColor, baseColor, borderColor, hoverColor, fontColor, fontSize, fontWeight, fontFamily, isMobile, mobileRoaming, mapZoom, mapGeoJson, activeWorldGeoJson, activeWorldMapName, mapScope, worldMetaByName, worldFocusRegion, worldCenterLng, worldCenterLat, effectiveMinZoom, effectiveMaxZoom, showMarineLabels, marineLabelData, activeMarineLabelName]);
 
   const saveImage = () => {
-    if (!chartRef.current) return;
-    const image = chartRef.current.getDataURL({
-      type: "png",
-      pixelRatio: 2,
-      backgroundColor: "#ffffff"
-    });
-    const link = document.createElement("a");
-    link.href = image;
-    const now = new Date();
-    const timestamp =
-      now.getFullYear().toString() +
-      (now.getMonth() + 1).toString().padStart(2, "0") +
-      now.getDate().toString().padStart(2, "0") +
-      now.getHours().toString().padStart(2, "0") +
-      now.getMinutes().toString().padStart(2, "0");
-    link.download = `超级地图(${timestamp}).png`;
-    link.click();
-    setNotice("图片已导出（所见即所得）");
+    if (!downloadChartImage(chartRef.current)) return;
+    setNotice("图片已导出");
     window.setTimeout(() => setNotice(null), 1200);
-  };
-
-  const applyTheme = (id: string) => {
-    if (!ensureCanEdit("登录后可切换主题与样式")) return;
-    const target = THEME_PRESETS.find((item) => item.id === id);
-    if (!target) return;
-    setThemeId(target.id);
-    setHighlightColor(target.highlightColor);
-    setBaseColor(target.baseColor);
-    setBorderColor(target.borderColor);
-    setHoverColor(target.hoverColor);
-  };
-
-  const applyColor = (type: "highlight" | "base" | "border" | "hover", color: string) => {
-    if (!ensureCanEdit("登录后可自定义颜色与高亮")) return;
-    setThemeId("custom");
-    if (type === "highlight") setHighlightColor(color);
-    if (type === "base") setBaseColor(color);
-    if (type === "border") setBorderColor(color);
-    if (type === "hover") setHoverColor(color);
-  };
-
-  const resetAll = () => {
-    if (!ensureCanEdit("登录后可重置和编辑地图配置")) return;
-    setSelectedNames(DEFAULT_STATE.selectedNames);
-    setLabelLanguage(DEFAULT_STATE.labelLanguage);
-    setHighlightColor(DEFAULT_STATE.highlightColor);
-    setBaseColor(DEFAULT_STATE.baseColor);
-    setBorderColor(DEFAULT_STATE.borderColor);
-    setHoverColor(DEFAULT_STATE.hoverColor);
-    setFontColor(DEFAULT_STATE.fontColor);
-    setFontSize(DEFAULT_STATE.fontSize);
-    setFontWeight(DEFAULT_STATE.fontWeight);
-    setFontFamily(DEFAULT_STATE.fontFamily);
-    setThemeId(DEFAULT_STATE.themeId);
-    setShowMarineLabels(DEFAULT_STATE.showMarineLabels ?? true);
-    if (mapScope === "world") {
-      const resetZoom = worldFocusRegion === "ALL" ? 1 : worldFocusCamera.zoom;
-      const clampedZoom = Math.max(effectiveMinZoom, Math.min(effectiveMaxZoom, resetZoom));
-      setMapZoom(clampedZoom);
-      setWorldCenterLng(worldFocusCamera.center[0]);
-      setWorldCenterLat(worldFocusCamera.center[1]);
-      if (chartRef.current) {
-        chartRef.current.setOption({
-          series: [{
-            zoom: clampedZoom,
-            center: worldFocusCamera.center
-          }]
-        });
-      }
-    } else {
-      setMapZoom(isMobile ? 0.95 : DEFAULT_STATE.mapZoom);
-      setWorldCenterLng(0);
-      setWorldCenterLat(10);
-    }
-    setActivePanel(null);
   };
 
   const activeChinaProfile = activeRegionName ? PROVINCE_INFO[activeRegionName] : null;
@@ -1290,7 +955,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     features.forEach((feature: any) => {
       const rawName = String(feature?.properties?.name || "");
       const canonical = getWorldCountryCanonicalName(rawName);
-      const key = normalizeName(canonical);
+      const key = normalizeWorldName(canonical);
       const fallbackCountryId = getWorldCountryIdByName(canonical);
       const runtimeMeta = (fallbackCountryId && worldMetaByIso[fallbackCountryId]) || worldMetaByName[key];
       const countryId = runtimeMeta?.iso || fallbackCountryId;
@@ -1315,7 +980,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     if (!activeRegionName) return null;
     const base = getWorldCountryProfile(activeRegionName);
     const canonical = getWorldCountryCanonicalName(activeRegionName);
-    const key = normalizeName(canonical);
+    const key = normalizeWorldName(canonical);
     const fallbackCountryId = getWorldCountryIdByName(canonical);
     const runtimeMeta = (fallbackCountryId && worldMetaByIso[fallbackCountryId]) || worldMetaByName[key];
     const countryId = runtimeMeta?.iso || fallbackCountryId;
@@ -1351,9 +1016,9 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     };
   }, [activeRegionName, worldGdpByName, worldGdpRankByName, worldMetaByIso, worldMetaByName, labelLanguage]);
   const worldDisplayNameZh =
-    (activeRegionName && worldMetaByName[normalizeName(getWorldCountryCanonicalName(activeRegionName))]?.zhName) ||
+    (activeRegionName && worldMetaByName[normalizeWorldName(getWorldCountryCanonicalName(activeRegionName))]?.zhName) ||
     (activeRegionName && getWorldCountryZhName(activeRegionName)) ||
-    (worldCanonicalName && worldMetaByName[normalizeName(worldCanonicalName)]?.zhName) ||
+    (worldCanonicalName && worldMetaByName[normalizeWorldName(worldCanonicalName)]?.zhName) ||
     (worldCanonicalName && getWorldCountryZhName(worldCanonicalName)) ||
     null;
   const localizedWorldProfile = useMemo(() => {
@@ -1390,7 +1055,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     const rows: WorldCoverageRow[] = features.map((feature: any) => {
       const rawName = String(feature?.properties?.name || "");
       const canonical = getWorldCountryCanonicalName(rawName);
-      const key = normalizeName(canonical);
+      const key = normalizeWorldName(canonical);
       const meta = worldMetaByName[key];
       const fallbackCountryId = getWorldCountryIdByName(canonical);
       const countryId = meta?.iso || fallbackCountryId;
@@ -1430,14 +1095,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     });
     return byRegion;
   }, [worldGeoJson, worldMetaByName, worldGdpByName]);
-  const worldCoverageRegions = useMemo(() => ([
-    { key: "ALL", label: "全部" },
-    { key: "Africa", label: "非洲" },
-    { key: "Asia", label: "亚洲" },
-    { key: "Europe", label: "欧洲" },
-    { key: "Americas", label: "美洲" },
-    { key: "Oceania", label: "大洋洲" }
-  ]), []);
+  const worldCoverageRegions = WORLD_COVERAGE_REGIONS;
   const activeWorldCoverage = worldCoverage[worldCoverageRegion] || worldCoverage.ALL || {
     total: 0,
     zhPct: 0,
@@ -1448,58 +1106,105 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
     missing: []
   };
 
-  const worldFocusRegions = useMemo(() => ([
-    { key: "ALL" as WorldFocusRegion, label: "全球" },
-    { key: "NorthAmerica" as WorldFocusRegion, label: "北美洲" },
-    { key: "SouthAmerica" as WorldFocusRegion, label: "南美洲" },
-    { key: "Europe" as WorldFocusRegion, label: "欧洲" },
-    { key: "Africa" as WorldFocusRegion, label: "非洲" },
-    { key: "Asia" as WorldFocusRegion, label: "亚洲" },
-    { key: "Oceania" as WorldFocusRegion, label: "大洋洲" }
-  ]), []);
+  const worldFocusRegions = WORLD_FOCUS_REGIONS;
   const currentWorldFocusLabel = worldFocusRegions.find((item) => item.key === worldFocusRegion)?.label || "全球";
 
-  const switchWorldFocusRegion = useCallback((region: WorldFocusRegion) => {
-    setWorldFocusRegion(region);
-    const camera = WORLD_REGION_CAMERA[region] || WORLD_REGION_CAMERA.ALL;
-    setMapZoom(camera.zoom);
-    setWorldCenterLng(camera.center[0]);
-    setWorldCenterLat(camera.center[1]);
-    if (chartRef.current) {
-      chartRef.current.setOption({
-        series: [{ zoom: camera.zoom, center: camera.center }]
-      });
-    }
-    if (mapScope !== "world") {
-      setMapScope("world");
-    }
-    setShowWorldCoveragePanel(true);
-    setShowScopeMenu(false);
-  }, [mapScope]);
+  const switchWorldFocusRegionAction = useWorldFocusRegionSwitch({
+    chartRef,
+    mapScope,
+    setWorldFocusRegion,
+    setMapZoom,
+    setWorldCenterLng,
+    setWorldCenterLat,
+    setMapScope,
+    setShowWorldCoveragePanel,
+    setShowScopeMenu
+  });
 
   if (!mounted || !isOpen) return null;
 
   return createPortal(
     <div className="fixed inset-0 z-[95] bg-black/50 backdrop-blur-sm flex items-center justify-center p-2 md:p-4">
       <div
-        className="w-full max-w-[1260px] h-[94vh] bg-white dark:bg-[#121212] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
+        className="relative w-full max-w-[1260px] h-[94vh] bg-white dark:bg-[#121212] rounded-2xl shadow-2xl overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="px-3 md:px-5 py-2.5 md:py-3 border-b border-gray-100 dark:border-[#333333] flex items-start md:items-center justify-between gap-2">
+        {resourceLoadingMessage ? (
+          <div className="pointer-events-none absolute left-1/2 top-5 z-[110] -translate-x-1/2 rounded-full border border-[#2c3f78]/40 bg-[#101c44]/92 px-4 py-2 text-xs font-medium text-[#e9f0ff] shadow-[0_14px_32px_rgba(3,8,26,0.4)]">
+            {resourceLoadingMessage}
+          </div>
+        ) : null}
+        <div className="px-2 md:px-5 py-2 md:py-3 border-b border-gray-100 dark:border-[#333333] flex items-start md:items-center justify-between gap-1.5 md:gap-2">
           <div className="min-w-0 flex items-start gap-2 md:gap-3">
             <div className="h-7 w-7 md:h-8 md:w-8 rounded-lg bg-[#060E9F] text-white flex items-center justify-center">
               <Paintbrush className="w-4 h-4" />
             </div>
             <div className="min-w-0 flex flex-col gap-0.5">
-              <div className="text-[#151E32] dark:text-white font-semibold text-sm md:text-lg leading-none whitespace-nowrap">超级地图</div>
-              <span className="text-[11px] text-gray-500 dark:text-gray-400 leading-none whitespace-nowrap">已选 {selectedNames.length} 个区域</span>
+              <div className="text-[#151E32] dark:text-white font-semibold text-xs md:text-lg leading-none whitespace-nowrap">超级地图</div>
+              <span className="text-[10px] md:text-[11px] text-gray-500 dark:text-gray-400 leading-none whitespace-nowrap">已选 {selectedNames.length} 个地区</span>
             </div>
           </div>
           <div className="flex items-center gap-1 md:gap-2">
+            <div ref={batchPanelRef} className="relative">
+              <button
+                onClick={() => {
+                  setShowBatchPanel((prev) => !prev);
+                  setShowSearchPanel(false);
+                }}
+                className="inline-flex items-center gap-1 px-2 py-1.5 md:px-2.5 md:py-2 rounded-md border border-gray-200 dark:border-[#333333] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2C2C2C] text-[11px] md:text-xs font-medium"
+                title="批量选取"
+              >
+                <ListPlus className="w-4 h-4" />
+                <span>批量选取</span>
+              </button>
+              {showBatchPanel && (
+                <div className="absolute right-0 mt-1 z-50 w-[320px] rounded-lg border border-gray-200 dark:border-[#333333] bg-white dark:bg-[#171717] shadow-xl p-3">
+                  <div className="text-[11px] font-semibold text-[#060E9F] mb-1">{createScopeHint(mapScope)}</div>
+                  <div className="text-[11px] text-gray-500 dark:text-gray-400 mb-2">
+                    支持逗号、分号、空格、换行分隔。切换地图后匹配范围会同步切换。
+                  </div>
+                  <textarea
+                    value={batchInput}
+                    onChange={(e) => setBatchInput(e.target.value)}
+                    placeholder={mapScope === "china" ? "例如：北京市，青海省；广东 河北" : "例如：China, Japan；United States"}
+                    className="w-full min-h-[92px] px-2 py-2 rounded-md border border-gray-200 dark:border-[#333333] bg-white dark:bg-[#0F0F0F] text-xs text-gray-700 dark:text-gray-200 outline-none resize-y"
+                    autoFocus
+                  />
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <label className="mr-auto inline-flex items-center gap-1.5 text-[11px] text-gray-600 dark:text-gray-300">
+                      <input
+                        type="checkbox"
+                        checked={batchAppendMode}
+                        onChange={(e) => setBatchAppendMode(e.target.checked)}
+                        className="h-3.5 w-3.5 accent-[#060E9F]"
+                      />
+                      仅追加到当前选中
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => setBatchInput("")}
+                      className="px-2.5 py-1 rounded-md text-xs border border-gray-200 dark:border-[#333333] text-gray-600 dark:text-gray-300"
+                    >
+                      清空
+                    </button>
+                    <button
+                      type="button"
+                      onClick={applyBatchSelection}
+                      className="px-2.5 py-1 rounded-md text-xs font-semibold border border-[#060E9F] bg-[#060E9F]/10 text-[#060E9F]"
+                    >
+                      确认选择
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
             <div ref={searchPanelRef} className="relative">
               <button
-                onClick={() => setShowSearchPanel((prev) => !prev)}
-                className="p-2 rounded-md border border-gray-200 dark:border-[#333333] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2C2C2C]"
+                onClick={() => {
+                  setShowSearchPanel((prev) => !prev);
+                  setShowBatchPanel(false);
+                }}
+                className="p-1.5 md:p-2 rounded-md border border-gray-200 dark:border-[#333333] text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-[#2C2C2C]"
               >
                 <Search className="w-4 h-4" />
               </button>
@@ -1513,7 +1218,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                         applySearchResult(searchResults[0]);
                       }
                     }}
-                    placeholder="输入国家/首都/省份/海峡（2字起）"
+                    placeholder="搜索省份、国家、首都或海峡（至少 2 个字）"
                     className="w-full h-8 px-2 rounded-md border border-gray-200 dark:border-[#333333] bg-white dark:bg-[#0F0F0F] text-xs text-gray-700 dark:text-gray-200 outline-none"
                     autoFocus
                   />
@@ -1530,7 +1235,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                       ))
                     ) : (
                       <div className="px-2 py-1.5 text-[11px] text-gray-500 dark:text-gray-400">
-                        {normalizedSearchKeyword.length >= 2 ? "未找到匹配项" : "请输入至少2个字"}
+                        {normalizedSearchKeyword.length >= 2 ? "没有找到匹配结果" : "请至少输入 2 个字"}
                       </div>
                     )}
                   </div>
@@ -1541,9 +1246,9 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
               <div className="relative">
                 <button
                   onClick={() => setShowScopeMenu((prev) => !prev)}
-                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs font-semibold border border-[#060E9F] bg-[#060E9F]/10 text-[#060E9F] whitespace-nowrap"
+                  className="inline-flex items-center gap-1 px-1.5 py-1 rounded-md text-[11px] md:text-xs font-semibold border border-[#060E9F] bg-[#060E9F]/10 text-[#060E9F] whitespace-nowrap"
                 >
-                  <span>{mapScope === "world" ? "世界地图" : "中国地图"}</span>
+                  <span>{mapScope === "world" ? "世界" : "中国"}</span>
                   <ChevronDown className={`w-3 h-3 transition-transform ${showScopeMenu ? "rotate-180" : ""}`} />
                 </button>
                 {showScopeMenu && (
@@ -1556,7 +1261,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                     </button>
                     <button
                       onClick={() => switchMapScope("world")}
-                      className={`w-full text-left px-2 py-1 text-xs font-semibold rounded ${mapScope === "world" ? "bg-[#060E9F]/10 text-[#060E9F]" : "text-gray-700 dark:text-gray-200"}`}
+                      className={`w-full text-left px-2 py-1 text-xs font-semibold rounded ${mapScope === "world" ? "世界" : "中国"}`}
                     >
                       世界地图
                     </button>
@@ -1566,7 +1271,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                           <button
                             key={item.key}
                             onClick={() => {
-                              switchWorldFocusRegion(item.key);
+                              switchWorldFocusRegionAction(item.key);
                               setShowScopeMenu(false);
                             }}
                             className={`w-full text-left px-2 py-1 text-xs rounded ${
@@ -1619,7 +1324,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                         <button
                           key={item.key}
                           onClick={() => {
-                            switchWorldFocusRegion(item.key);
+                            switchWorldFocusRegionAction(item.key);
                             setShowWorldRegionMenu(false);
                           }}
                           className={`w-full text-left px-2 py-1 text-xs rounded ${
@@ -1642,6 +1347,41 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
             </button>
           </div>
         </div>
+        {batchResult ? (
+          <div className="absolute inset-0 z-[120] bg-black/35 flex items-center justify-center px-3">
+            <div className="w-full max-w-[520px] rounded-xl border border-gray-200 dark:border-[#333333] bg-white dark:bg-[#171717] shadow-2xl p-4">
+              <div className="text-sm font-semibold text-[#151E32] dark:text-white">{createScopeSummaryTitle(batchResult.scope)}</div>
+              <div className="mt-2 text-xs text-gray-700 dark:text-gray-200">
+                已选中 <span className="font-semibold text-[#060E9F]">{batchResult.matched.length}</span> 项
+              </div>
+              <div className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">
+                模式：{batchResult.mode === "append" ? "追加" : "覆盖"}，当前总计：{batchResult.totalSelected} 项
+              </div>
+              <div className="mt-2 rounded-md border border-gray-200 dark:border-[#333333] p-2 max-h-[130px] overflow-y-auto text-xs text-gray-700 dark:text-gray-200">
+                {batchResult.matched.length > 0 ? batchResult.matched.join("、") : "未匹配到任何区域。请确认当前地图模式与输入内容一致。"}
+              </div>
+              {batchResult.missing.length > 0 ? (
+                <>
+                  <div className="mt-3 text-xs text-gray-700 dark:text-gray-200">
+                    未识别 <span className="font-semibold text-[#B45309]">{batchResult.missing.length}</span> 项
+                  </div>
+                  <div className="mt-2 rounded-md border border-amber-200 bg-amber-50/70 dark:border-amber-800/60 dark:bg-amber-950/20 p-2 max-h-[110px] overflow-y-auto text-xs text-amber-800 dark:text-amber-300">
+                    {batchResult.missing.join("、")}
+                  </div>
+                </>
+              ) : null}
+              <div className="mt-3 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => setBatchResult(null)}
+                  className="px-3 py-1.5 rounded-md text-xs font-semibold border border-[#060E9F] bg-[#060E9F]/10 text-[#060E9F]"
+                >
+                  知道了
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : null}
 
         <div className="flex-1 min-h-0 relative bg-[#F8FAFC] dark:bg-[#0F0F0F]">
           <div ref={chartHostRef} className="absolute inset-0" />
@@ -1666,7 +1406,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                     className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 text-xs rounded-md border border-gray-200 dark:border-[#333333] text-gray-700 dark:text-gray-200"
                   >
                     <Languages className="w-3 h-3" />
-                    {labelLanguage === "zh" ? "EN" : labelLanguage === "en" ? "不显示" : "中文"}
+                    {labelLanguage === "zh" ? "EN" : labelLanguage === "en" ? "隐藏" : "中文"}
                   </button>
                   {mapScope === "world" && (
                     <button
@@ -1677,7 +1417,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                           : "border-gray-200 dark:border-[#333333] text-gray-700 dark:text-gray-200"
                       }`}
                     >
-                      {isMobile ? (showMarineLabels ? "海洋关" : "海洋开") : (showMarineLabels ? "隐藏海洋标识" : "显示海洋标识")}
+                      {isMobile ? (showMarineLabels ? "海洋开" : "海洋关") : (showMarineLabels ? "隐藏海洋" : "显示海洋")}
                     </button>
                   )}
                 </div>
@@ -1689,7 +1429,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                   { key: "base", label: "底色" },
                   { key: "border", label: "边界" },
                   { key: "hover", label: "Hover" },
-                  { key: "fontWeight", label: "粗细" },
+                  { key: "fontWeight", label: "字重" },
                   { key: "fontSize", label: "字号" },
                   { key: "fontFamily", label: "字体" }
                   ].map((item) => (
@@ -1715,7 +1455,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                             {THEME_PRESETS.map((theme) => (
                               <button
                                 key={theme.id}
-                                onClick={() => applyTheme(theme.id)}
+                                onClick={() => applyThemeAction(theme.id)}
                                 className={`h-7 px-2 rounded-md border text-[10px] inline-flex items-center gap-1 ${
                                   themeId === theme.id
                                     ? "border-[#060E9F] bg-[#060E9F]/10 text-[#060E9F] dark:text-blue-300"
@@ -1825,7 +1565,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                             {COLOR_SWATCHES.highlight.map((color) => (
                               <button
                                 key={color}
-                                onClick={() => applyColor("highlight", color)}
+                                onClick={() => applyColorAction("highlight", color)}
                                 className={`w-6 h-6 rounded border ${
                                   highlightColor === color ? "border-[#111827] dark:border-white" : "border-gray-200 dark:border-[#333333]"
                                 }`}
@@ -1837,7 +1577,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                               <input
                                 type="color"
                                 value={highlightColor}
-                                onChange={(e) => applyColor("highlight", e.target.value)}
+                                onChange={(e) => applyColorAction("highlight", e.target.value)}
                                 className="w-0 h-0 opacity-0"
                               />
                             </label>
@@ -1849,7 +1589,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                             {COLOR_SWATCHES.base.map((color) => (
                               <button
                                 key={color}
-                                onClick={() => applyColor("base", color)}
+                                onClick={() => applyColorAction("base", color)}
                                 className={`w-6 h-6 rounded border ${
                                   baseColor === color ? "border-[#111827] dark:border-white" : "border-gray-200 dark:border-[#333333]"
                                 }`}
@@ -1861,7 +1601,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                               <input
                                 type="color"
                                 value={baseColor}
-                                onChange={(e) => applyColor("base", e.target.value)}
+                                onChange={(e) => applyColorAction("base", e.target.value)}
                                 className="w-0 h-0 opacity-0"
                               />
                             </label>
@@ -1873,7 +1613,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                             {COLOR_SWATCHES.border.map((color) => (
                               <button
                                 key={color}
-                                onClick={() => applyColor("border", color)}
+                                onClick={() => applyColorAction("border", color)}
                                 className={`w-6 h-6 rounded border ${
                                   borderColor === color ? "border-[#111827] dark:border-white" : "border-gray-200 dark:border-[#333333]"
                                 }`}
@@ -1885,7 +1625,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                               <input
                                 type="color"
                                 value={borderColor}
-                                onChange={(e) => applyColor("border", e.target.value)}
+                                onChange={(e) => applyColorAction("border", e.target.value)}
                                 className="w-0 h-0 opacity-0"
                               />
                             </label>
@@ -1897,7 +1637,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                             {COLOR_SWATCHES.hover.map((color) => (
                               <button
                                 key={color}
-                                onClick={() => applyColor("hover", color)}
+                                onClick={() => applyColorAction("hover", color)}
                                 className={`w-6 h-6 rounded border ${
                                   hoverColor === color ? "border-[#111827] dark:border-white" : "border-gray-200 dark:border-[#333333]"
                                 }`}
@@ -1909,7 +1649,7 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
                               <input
                                 type="color"
                                 value={hoverColor}
-                                onChange={(e) => applyColor("hover", e.target.value)}
+                                onChange={(e) => applyColorAction("hover", e.target.value)}
                                 className="w-0 h-0 opacity-0"
                               />
                             </label>
@@ -1923,18 +1663,11 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
 
                 <div className={`flex items-center gap-2 ${isMobile ? "justify-between" : ""}`}>
                   <button
-                    onClick={resetAll}
+                    onClick={resetAllAction}
                     className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-md bg-gray-100 hover:bg-gray-200 dark:bg-[#2C2C2C] dark:text-gray-200 text-xs"
                   >
                     <Trash2 className="w-3 h-3" />
                     重置
-                  </button>
-                  <button
-                    onClick={saveProgress}
-                    className="shrink-0 inline-flex items-center gap-1 px-2 py-1.5 rounded-md bg-[#060E9F] text-white text-xs hover:bg-[#060E9F]/90"
-                  >
-                    <Save className="w-3 h-3" />
-                    保存进度
                   </button>
                   <button
                     onClick={saveImage}
@@ -2041,11 +1774,6 @@ export function SuperMapModal({ isOpen, onClose, userId }: SuperMapModalProps) {
           border: 2px solid #060e9f;
         }
       `}</style>
-      <AuthModal
-        isOpen={showAuthModal}
-        onClose={() => setShowAuthModal(false)}
-        floatingHint={authHint}
-      />
     </div>,
     document.body
   );

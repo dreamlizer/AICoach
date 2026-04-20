@@ -1,5 +1,5 @@
 import React from "react";
-import { Menu, Hammer, Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, Hammer, Menu, X } from "lucide-react";
 import { ProjectLogo } from "@/app/components/ProjectLogo";
 import { UserMenu } from "@/app/components/UserMenu";
 import { getToolById } from "@/lib/tools_registry";
@@ -13,6 +13,7 @@ interface AppHeaderProps {
   isSuperAdmin: boolean;
   showDebugInfo: boolean;
   setShowDebugInfo: (show: boolean) => void;
+  onOpenHome?: () => void;
 }
 
 export function AppHeader({
@@ -23,83 +24,84 @@ export function AppHeader({
   isSuperAdmin,
   showDebugInfo,
   setShowDebugInfo,
+  onOpenHome,
 }: AppHeaderProps) {
   return (
     <>
-      {/* Left Side: Toggle & Logo/Icon */}
-      <div className="absolute top-2 md:top-4 left-2 md:left-4 z-20 flex items-center">
-        {!sidebarOpen && (
+      <div className="absolute left-2 top-2 z-20 flex items-center md:left-4 md:top-4">
+        {!sidebarOpen ? (
           <button
             onClick={onSidebarOpen}
-            className="flex h-8 w-8 md:h-10 md:w-10 items-center justify-center rounded-full border border-[#060E9F]/10 dark:border-[#333333] bg-white dark:bg-[#1E1E1E] text-[#060E9F] dark:text-blue-400 shadow-sm hover:bg-gray-50 dark:hover:bg-[#0F0F0F] mr-2"
-            aria-label="open sidebar"
+            className="mr-2 flex h-8 w-8 items-center justify-center rounded-full border border-[#060E9F]/10 bg-white text-[#060E9F] shadow-sm hover:bg-gray-50 dark:border-[#333333] dark:bg-[#1E1E1E] dark:text-blue-400 dark:hover:bg-[#0F0F0F] md:h-10 md:w-10"
+            aria-label="打开侧边栏"
           >
             <Menu className="h-5 w-5" />
           </button>
-        )}
+        ) : null}
+
         {toolsPanelOpen ? (
-          <div className="flex items-center justify-center w-8 h-8 md:w-12 md:h-12 bg-[#060E9F] text-white rounded-lg shadow-sm">
-            <Hammer className="w-5 h-5 md:w-7 md:h-7" />
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#060E9F] text-white shadow-sm md:h-12 md:w-12">
+            <Hammer className="h-5 w-5 md:h-7 md:w-7" />
           </div>
         ) : activeToolId ? (
           (() => {
             const tool = getToolById(activeToolId);
             const Icon = tool ? toolIconMap[tool.icon] : null;
             return Icon ? (
-              <div className="flex items-center justify-center w-8 h-8 md:w-12 md:h-12 bg-[#060E9F] text-white rounded-lg shadow-sm">
-                <Icon className="w-5 h-5 md:w-7 md:h-7" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-[#060E9F] text-white shadow-sm md:h-12 md:w-12">
+                <Icon className="h-5 w-5 md:h-7 md:w-7" />
               </div>
             ) : (
-              <div className="relative w-8 h-8 md:w-16 md:h-16 shrink-0">
-                <ProjectLogo className="w-full h-full" />
+              <div className="relative h-8 w-8 shrink-0 md:h-16 md:w-16">
+                <ProjectLogo className="h-full w-full" />
               </div>
             );
           })()
         ) : (
-          <div className="relative w-8 h-8 md:w-16 md:h-16 shrink-0">
-            <ProjectLogo className="w-full h-full" />
+          <div className="relative h-8 w-8 shrink-0 md:h-16 md:w-16">
+            <ProjectLogo className="h-full w-full" />
           </div>
         )}
       </div>
 
-      {/* Center: Mobile Header Title */}
-      <div className="absolute top-0 left-0 w-full h-12 flex items-center justify-center pointer-events-none md:hidden z-30">
-        <span className="text-[10px] font-bold uppercase tracking-wider text-[#060E9F] dark:text-blue-400 opacity-90 scale-90 transform origin-center whitespace-nowrap">
-          Executive Insider
+      <div className="pointer-events-none absolute left-0 top-0 z-30 flex h-12 w-full items-center justify-center md:hidden">
+        <span className="origin-center scale-90 transform whitespace-nowrap text-[10px] font-bold uppercase tracking-[0.2em] text-[#060E9F] opacity-90 dark:text-blue-400">
+          Dream Lab
         </span>
       </div>
 
-      {/* Right Side: Debug & User Menu */}
-      <div className="absolute top-2 md:top-4 right-2 md:right-4 z-20 flex items-center gap-2">
-        {isSuperAdmin && (
+      <div className="absolute right-2 top-2 z-20 flex items-center gap-2 md:right-4 md:top-4">
+        {onOpenHome ? (
+          <button
+            onClick={onOpenHome}
+            aria-label="关闭并返回首页"
+            className="flex h-8 w-8 items-center justify-center rounded-full border border-[#060E9F]/12 bg-white text-[#060E9F] shadow-sm transition hover:bg-[#F8F9FA] dark:border-[#333333] dark:bg-[#1E1E1E] dark:text-blue-400 dark:hover:bg-[#0F0F0F] md:h-10 md:w-10"
+          >
+            <X className="h-4 w-4 md:h-5 md:w-5" />
+          </button>
+        ) : null}
+
+        {isSuperAdmin ? (
           <button
             onClick={() => setShowDebugInfo(!showDebugInfo)}
-            className="hidden md:flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-[#1E1E1E] text-gray-500 dark:text-dark-text-secondary shadow-sm hover:text-[#060E9F] dark:hover:text-blue-400 transition-colors"
+            className="hidden h-8 w-8 items-center justify-center rounded-full bg-white text-gray-500 shadow-sm transition-colors hover:text-[#060E9F] dark:bg-[#1E1E1E] dark:text-dark-text-secondary dark:hover:text-blue-400 md:flex"
             title={showDebugInfo ? "Hide Thinking Process" : "Show Thinking Process"}
           >
-            {showDebugInfo ? (
-              <Eye className="h-4 w-4" />
-            ) : (
-              <EyeOff className="h-4 w-4" />
-            )}
+            {showDebugInfo ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
           </button>
-        )}
+        ) : null}
+
         <div className="relative">
           <UserMenu />
-          {/* Mobile Debug Eye - Below Avatar */}
-          {isSuperAdmin && (
+          {isSuperAdmin ? (
             <button
               onClick={() => setShowDebugInfo(!showDebugInfo)}
-              className="md:hidden absolute -bottom-8 right-0 flex h-6 w-6 items-center justify-center rounded-full bg-white dark:bg-[#1E1E1E] text-gray-500 dark:text-dark-text-secondary shadow-sm border border-gray-100 dark:border-[#333333]"
+              className="absolute -bottom-8 right-0 flex h-6 w-6 items-center justify-center rounded-full border border-gray-100 bg-white text-gray-500 shadow-sm dark:border-[#333333] dark:bg-[#1E1E1E] dark:text-dark-text-secondary md:hidden"
               title={showDebugInfo ? "Hide Thinking Process" : "Show Thinking Process"}
             >
-              {showDebugInfo ? (
-                <Eye className="h-3 w-3" />
-              ) : (
-                <EyeOff className="h-3 w-3" />
-              )}
+              {showDebugInfo ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
             </button>
-          )}
+          ) : null}
         </div>
       </div>
     </>

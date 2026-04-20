@@ -10,12 +10,14 @@ export function WelcomeHeader({ titleLines }: WelcomeHeaderProps) {
     if (parts.length === 1) {
       return <span className="block md:inline-block">{line}</span>;
     }
+
     const delimiters = line.match(/[,，]/g) || [];
     return parts.map((part, index) => {
       const delimiter = delimiters[index] || "";
       if (part === "" && !delimiter) {
         return null;
       }
+
       return (
         <span key={`${part}-${index}`} className="block md:inline-block">
           {part}
@@ -26,12 +28,12 @@ export function WelcomeHeader({ titleLines }: WelcomeHeaderProps) {
   };
 
   return (
-    <header className="pt-0 md:pt-6 pb-2 text-center shrink-0 bg-white dark:bg-transparent w-full z-10 transition-all duration-300">
-      <div className="hidden md:block text-xs font-sans font-bold tracking-[0.2em] text-[#060E9F]/60 dark:text-blue-400/80 uppercase">
-        EXECUTIVE INSIDER
+    <header className="w-full shrink-0 bg-white pt-0 pb-2 text-center transition-all duration-300 dark:bg-transparent md:pt-6">
+      <div className="hidden text-xs font-sans font-bold uppercase tracking-[0.2em] text-[#060E9F]/60 dark:text-blue-400/80 md:block">
+        DREAM LAB
       </div>
       <div className="mt-2 flex w-full flex-col items-center">
-        <h1 className="max-w-4xl px-6 text-center text-2xl md:text-3xl font-sans font-light dark:font-thin tracking-[0.15em] leading-relaxed text-[#202124] dark:text-[#9AA0A6] whitespace-nowrap transition-colors">
+        <h1 className="max-w-4xl whitespace-nowrap px-6 text-center font-sans text-2xl font-light leading-relaxed tracking-[0.15em] text-[#202124] transition-colors dark:font-thin dark:text-[#9AA0A6] md:text-3xl">
           {renderLine(titleLines[0])}
           {renderLine(titleLines[1])}
         </h1>

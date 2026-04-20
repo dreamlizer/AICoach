@@ -1,37 +1,38 @@
 import { NextResponse } from "next/server";
 import { getUserStats, getAnalyticsEvents } from "@/lib/db";
-import { getCurrentUser } from "@/lib/session";
+import { requireAdmin } from "@/lib/server/require-admin";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   try {
+    const admin = await requireAdmin();
+    if (!admin.ok) {
+      return admin.response;
+    }
+
     const { searchParams } = new URL(request.url);
     const targetUserId = searchParams.get("userId");
-    const type = searchParams.get("type") || "stats"; // 'stats' or 'events'
-    const limit = parseInt(searchParams.get("limit") || "50");
+    const type = searchParams.get("type") || "stats";
+    const limit = parseInt(searchParams.get("limit") || "50", 10);
+    const queryUserId = targetUserId ? parseInt(targetUserId, 10) : admin.user.id;
 
-    // Security Check: In a real app, you MUST check if the current user is an Admin.
-    // For this demo/local version, we assume access is allowed or we just check if user is logged in.
-    const currentUser = getCurrentUser();
-    if (!currentUser) {
-        return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    if (!Number.isFinite(queryUserId) || queryUserId <= 0) {
+      return NextResponse.json({ error: "Invalid user id" }, { status: 400 });
     }
-    
-    // Allow viewing own stats, or if "admin" (logic to be implemented)
-    // For now, we allow any logged-in user to view stats if they provide a userId, 
-    // or view their own if no userId provided.
-    const queryUserId = targetUserId ? parseInt(targetUserId) : currentUser.id;
 
     if (type === "events") {
       const events = getAnalyticsEvents(limit, queryUserId);
-      return NextResponse.json({ events });
-    } else {
-      const stats = getUserStats(queryUserId);
-      return NextResponse.json({ stats });
+      return NextResponse.json({ events }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
     }
+
+    const stats = getUserStats(queryUserId);
+    return NextResponse.json({ stats }, { headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } });
   } catch (error) {
     console.error("Stats API Error:", error);
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500, headers: { "Cache-Control": "no-store, no-cache, must-revalidate" } }
+    );
   }
 }

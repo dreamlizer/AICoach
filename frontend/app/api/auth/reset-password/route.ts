@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+﻿import { NextResponse } from "next/server";
 import { verifyCode, getUserByEmail, updateUserPassword } from "@/lib/db";
 import { validatePassword } from "@/lib/session";
 import bcrypt from "bcryptjs";
@@ -8,7 +8,7 @@ export async function POST(request: Request) {
     const { email, code, newPassword } = await request.json();
 
     if (!email || !code || !newPassword) {
-      return NextResponse.json({ error: "所有字段都必须填写" }, { status: 400 });
+      return NextResponse.json({ error: "All fields are required" }, { status: 400 });
     }
 
     const passwordError = validatePassword(newPassword);
@@ -16,25 +16,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: passwordError }, { status: 400 });
     }
 
-    // Verify Code
-    const isValid = verifyCode(email, code);
+    const isValid = await verifyCode(email, code);
     if (!isValid) {
-      return NextResponse.json({ error: "验证码无效或已过期" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid or expired verification code" }, { status: 400 });
     }
 
-    // Get User
-    const user = getUserByEmail(email) as any;
+    const user = await getUserByEmail(email);
     if (!user) {
-        return NextResponse.json({ error: "用户不存在" }, { status: 400 });
+      return NextResponse.json({ error: "User not found" }, { status: 400 });
     }
 
-    // Update Password
     const passwordHash = await bcrypt.hash(newPassword, 10);
-    updateUserPassword(user.id, passwordHash);
+    await updateUserPassword(user.id, passwordHash);
 
-    return NextResponse.json({ success: true, message: "密码重置成功" });
+    return NextResponse.json({ success: true, message: "Password reset successfully" });
   } catch (error: any) {
     console.error("Reset Password Error:", error);
-    return NextResponse.json({ error: error.message || "重置密码失败" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Password reset failed" }, { status: 500 });
   }
 }
